@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  url         String
+  status      String   @default("pending") // pending, extracting, analyzing, speccing, generating, completed, failed
+  componentQuery String?
+  viewport    String   @default("desktop") // desktop, mobile, tablet
+  screenshotUrl String?
+  rawHtml     String?
+  pageTitle   String?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  components  ExtractedComponent[]
+  tokens      DesignToken[]
+}
+
+model ExtractedComponent {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String
+  tag         String?
+  html        String
+  cssClasses  String?
+  inlineStyles String?
+  spec        String?   // JSON - component specification
+  generatedCode String? // Generated HTML/React/Vue code
+  codeFormat  String   @default("html") // html, react, vue
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  references  Reference[]
+}
+
+model DesignToken {
+  id          String   @id @default(cuid())
+  projectId   String
+  category    String   // color, spacing, typography, border-radius, shadow, opacity
+  name        String
+  value       String
+  originalVar String?  // Original CSS variable name if from :root
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model Reference {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  sourceUrl      String?
+  componentId    String?  // Link to extracted component
+  html           String
+  css            String?
+  spec           String?  // JSON
+  tags           String   @default("[]") // JSON array of tag strings
+  thumbnail      String?
+  isFavorite     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  component      ExtractedComponent? @relation(fields: [componentId], references: [id])
+}

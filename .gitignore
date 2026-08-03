@@ -1,0 +1,67 @@
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env
+.env
+.env.local
+.env.production
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# logs
+*.log
+
+# database
+/db/*.db
+/db/*.db-journal
+
+# Z.ai platform (not part of the project)
+.zscripts/
+Caddyfile
+.z-ai-config
+.claude
+
+# internal working files
+tool-results/
+upload/
+download/
+worklog.md
+/skills/
+
+# mini-services (platform feature, not used standalone)
+/mini-services/
+
+# examples (reference only, not part of the app)
+/examples/
+
+# tests (Z.ai runtime tests, not part of the app)
+/tests/
