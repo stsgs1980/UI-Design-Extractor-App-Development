@@ -108,10 +108,10 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
         updatedComponents.push(updated);
       }
 
-      // Update project status
+      // Update project status to 'specced' (not 'completed')
       await db.project.update({
         where: { id },
-        data: { status: 'completed' },
+        data: { status: 'specced' },
       });
 
       return NextResponse.json({ components: updatedComponents });

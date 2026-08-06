@@ -1,8 +1,11 @@
 export type ProjectStatus =
   | 'pending'
   | 'extracting'
+  | 'extracted'
   | 'analyzing'
+  | 'analyzed'
   | 'speccing'
+  | 'specced'
   | 'generating'
   | 'completed'
   | 'failed';
@@ -120,8 +123,11 @@ export const PIPELINE_STEPS: PipelineStep[] = [
 export const STATUS_COLORS: Record<ProjectStatus, string> = {
   pending: 'bg-muted text-muted-foreground',
   extracting: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  extracted: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   analyzing: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  analyzed: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   speccing: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+  specced: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
   generating: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   completed: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   failed: 'bg-destructive/10 text-destructive',

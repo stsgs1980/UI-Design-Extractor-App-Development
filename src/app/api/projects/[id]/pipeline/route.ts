@@ -14,8 +14,52 @@ function stripMarkdownFences(text: string): string {
     .trim();
 }
 
+function repairJson(text: string): string {
+  // Step 1: normalize - remove literal newlines/tabs inside JSON strings
+  // (LLMs often put unescaped newlines inside string values)
+  let fixed = text.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\t/g, ' ');
+  // Remove control characters
+  fixed = fixed.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+  // Try parse as-is
+  try { JSON.parse(fixed); return fixed; } catch {}
+  // Remove trailing comma before } or ]
+  fixed = fixed.replace(/,\s*([\]}])/g, '$1');
+  try { JSON.parse(fixed); return fixed; } catch {}
+  // Find last complete JSON by trying substrings at each '}'
+  let lastAttempt = fixed;
+  let pos = fixed.length;
+  while (pos > 0) {
+    pos = fixed.lastIndexOf('}', pos - 1);
+    if (pos < 0) break;
+    let candidate = fixed.substring(0, pos + 1);
+    let ob = 0, oc = 0, inStr = false, escaped = false;
+    for (let i = 0; i < candidate.length; i++) {
+      const ch = candidate[i];
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\') { escaped = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (ch === '[') ob++; if (ch === ']') ob--;
+      if (ch === '{') oc++; if (ch === '}') oc--;
+    }
+    if (inStr) candidate += '"';
+    while (oc > 0) { candidate += '}'; oc--; }
+    while (ob > 0) { candidate += ']'; ob--; }
+    try {
+      const parsed = JSON.parse(candidate);
+      lastAttempt = candidate;
+      if (parsed.components || parsed.designTokens) return candidate;
+    } catch {}
+  }
+  return lastAttempt;
+}
+
 const ANALYZE_SYSTEM_PROMPT = `You are a UI analysis expert. Extract components and design tokens from HTML.
 You must respond with ONLY valid JSON, no markdown code blocks, no explanation.
+Extract at most 8 most important/visible components. For each component, include only the essential outer HTML (keep under 500 characters).
+
+CRITICAL: In the "html" field, replace all double quotes (\" ) with single quotes ('). This prevents JSON parsing errors.
+
 The JSON must have this exact structure:
 {
   "components": [
@@ -54,7 +98,7 @@ The JSON must have this exact structure:
 const GENERATE_SYSTEM_PROMPT = `You are a clean code generation expert. Generate standalone, reusable UI component code from specifications.
 You must respond with ONLY the generated code, no markdown code blocks, no explanation, no commentary.`;
 
-async function runAnalyze(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>) {
+async function runAnalyze(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>, componentQuery: string | null) {
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project || !project.rawHtml) {
     throw new Error('No HTML data to analyze');
@@ -62,15 +106,20 @@ async function runAnalyze(projectId: string, zai: Awaited<ReturnType<typeof ZAI.
 
   await db.project.update({ where: { id: projectId }, data: { status: 'analyzing' } });
 
+  const focusInstruction = componentQuery
+    ? `\n\nIMPORTANT: Focus ONLY on these component types: ${componentQuery}. Ignore other elements.`
+    : '';
+
   const USER_PROMPT = `Analyze the following HTML and extract all reusable UI components and design tokens.
 
 Focus on:
 1. Identifying distinct UI components (buttons, cards, navbars, forms, etc.)
 2. Extracting design tokens (colors, spacing, typography, shadows, border-radius, opacity)
 3. Capturing CSS custom properties from :root or style blocks
+${focusInstruction}
 
 HTML to analyze:
-${project.rawHtml.substring(0, 50000)}`;
+${project.rawHtml.substring(0, 30000)}`;
 
   const completion = await zai.chat.completions.create({
     messages: [
@@ -83,15 +132,25 @@ ${project.rawHtml.substring(0, 50000)}`;
   const response = completion.choices[0]?.message?.content;
   if (!response) throw new Error('Empty LLM response during analysis');
 
-  const parsed = JSON.parse(stripMarkdownFences(response));
+  const parsed = JSON.parse(repairJson(stripMarkdownFences(response)));
 
   // Clear existing data
   await db.extractedComponent.deleteMany({ where: { projectId } });
   await db.designToken.deleteMany({ where: { projectId } });
 
+  // Filter valid components (html is required, name is required)
+  const validComponents = (parsed.components || []).filter(
+    (comp: { name?: string; html?: string | null }) =>
+      comp.name && comp.html && typeof comp.html === 'string' && comp.html.trim().length > 0
+  );
+
+  if (validComponents.length === 0) {
+    throw new Error('No valid components found in the analysis. The page may be too simple or the LLM could not parse it.');
+  }
+
   // Create components
   await Promise.all(
-    (parsed.components || []).map((comp: { name: string; tag?: string | null; html: string; cssClasses?: string | null; inlineStyles?: string | null }) =>
+    validComponents.map((comp: { name: string; tag?: string | null; html: string; cssClasses?: string | null; inlineStyles?: string | null }) =>
       db.extractedComponent.create({
         data: {
           projectId,
@@ -251,7 +310,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     try {
       // Step 1: Analyze
-      await runAnalyze(id, zai);
+      await runAnalyze(id, zai, project.componentQuery);
 
       // Step 2: Spec
       await runSpec(id, zai);
