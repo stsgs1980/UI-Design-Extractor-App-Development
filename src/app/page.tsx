@@ -58,8 +58,8 @@ export default function Home() {
                 <span>URL -&gt; Teardown -&gt; Deconstruct -&gt; Spec -&gt; Generate</span>
               </div>
               <div className="flex items-center gap-3">
-                <span>MCP Server Ready</span>
                 <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span>System Active</span>
               </div>
             </div>
           </footer>
