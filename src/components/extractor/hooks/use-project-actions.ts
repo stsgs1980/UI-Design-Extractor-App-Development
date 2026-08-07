@@ -6,7 +6,7 @@ import { useExtractorStore } from "@/store/extractor-store";
 import { toast } from "sonner";
 
 export function useProjectActions() {
-  const { selectedProjectId, setCurrentProject, addReference } = useExtractorStore();
+  const { selectedProjectId, setCurrentProject, addReference, removeProject } = useExtractorStore();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSpecing, setIsSpecing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -190,5 +190,6 @@ export function useProjectActions() {
     setRefName,
     refTags,
     setRefTags,
+    removeProjectFromStore: removeProject,
   };
 }

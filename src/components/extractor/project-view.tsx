@@ -2,24 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useExtractorStore } from "@/store/extractor-store";
-import { STATUS_COLORS } from "@/types/extractor";
 import type { ExtractedComponent, DesignToken } from "@/types/extractor";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Loader2,
-  ExternalLink,
-  Code2,
-  Palette,
-  FileText,
-  Play,
-  ArrowLeft,
-  Eye,
-} from "lucide-react";
-import { PipelineIndicator } from "./pipeline-indicator";
+import { Loader2, Code2, Palette, FileText, Eye } from "lucide-react";
+import { toast } from "sonner";
 import { useProjectActions } from "./hooks/use-project-actions";
 import { usePipelineSteps } from "./hooks/use-pipeline-steps";
+import { ProjectHeader } from "./project-header";
 import { OverviewTab } from "./overview-tab";
 import { ComponentDetail } from "./component-detail";
 import { TokenGrid } from "./token-grid";
@@ -42,7 +32,6 @@ export function ProjectView() {
     actions.isPipelineRunning,
   );
 
-  // Sync persisted logs into hook state
   useEffect(() => {
     if (currentProject?.pipelineLogs) {
       try {
@@ -63,6 +52,19 @@ export function ProjectView() {
     return acc;
   }, {});
 
+  const deleteProject = async () => {
+    if (!currentProject) return;
+    if (!confirm(`Delete "${currentProject.name}" and all its data?`)) return;
+    const res = await fetch(`/api/projects/${currentProject.id}`, { method: "DELETE" });
+    if (res.ok) {
+      actions.removeProjectFromStore(currentProject.id);
+      setView("dashboard");
+      toast.success("Project deleted");
+    } else {
+      toast.error("Failed to delete project");
+    }
+  };
+
   if (!currentProject) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -78,54 +80,14 @@ export function ProjectView() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="mt-0.5"
-            onClick={() => setView("dashboard")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">{project.name}</h1>
-            <div className="mt-1 flex items-center gap-2">
-              <a
-                href={project.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-foreground text-xs transition-colors"
-              >
-                {project.url}
-                <ExternalLink className="ml-0.5 inline h-3 w-3" />
-              </a>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[project.status]}`}
-              >
-                {project.status}
-              </span>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <PipelineIndicator steps={pipelineSteps} compact />
-          {!["completed", "generating", "speccing", "analyzing", "extracting"].includes(
-            project.status,
-          ) && (
-            <Button
-              size="sm"
-              onClick={actions.runFullPipeline}
-              disabled={actions.isPipelineRunning}
-            >
-              <Play className="mr-1.5 h-3.5 w-3.5" /> Run Pipeline
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Tabs */}
+      <ProjectHeader
+        project={project}
+        pipelineSteps={pipelineSteps}
+        isPipelineRunning={actions.isPipelineRunning}
+        onDelete={deleteProject}
+        onBack={() => setView("dashboard")}
+        onRunPipeline={actions.runFullPipeline}
+      />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-muted/50">
           <TabsTrigger value="overview" className="text-xs">
@@ -152,7 +114,6 @@ export function ProjectView() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Overview Tab */}
         <TabsContent value="overview" className="mt-6 space-y-6">
           <OverviewTab
             project={project}
@@ -172,7 +133,6 @@ export function ProjectView() {
           />
         </TabsContent>
 
-        {/* Components Tab */}
         <TabsContent value="components" className="mt-6 space-y-4">
           {components.length === 0 ? (
             <div className="flex h-48 items-center justify-center rounded-lg border border-dashed">
@@ -210,7 +170,6 @@ export function ProjectView() {
           )}
         </TabsContent>
 
-        {/* Design Tokens Tab */}
         <TabsContent value="tokens" className="mt-6 space-y-6">
           <TokenGrid
             categories={tokenCategories}
@@ -225,7 +184,6 @@ export function ProjectView() {
           />
         </TabsContent>
 
-        {/* Generated Code Tab */}
         <TabsContent value="code" className="mt-6 space-y-4">
           <CodeView
             components={components}
