@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
+import { llmWithRetry, sleep } from '@/lib/llm-retry';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -66,13 +67,18 @@ Inline styles: ${component.inlineStyles || 'N/A'}
 
 Provide a comprehensive spec including props, variants, accessibility notes, and dependencies.`;
 
-        const completion = await zai.chat.completions.create({
+        const completion = await llmWithRetry(zai, {
           messages: [
             { role: 'assistant', content: SYSTEM_PROMPT },
             { role: 'user', content: USER_PROMPT },
           ],
           thinking: { type: 'disabled' },
         });
+
+        // Throttle between component spec calls
+        if (project.components.indexOf(component) < project.components.length - 1) {
+          await sleep(1500);
+        }
 
         const response = completion.choices[0]?.message?.content;
         if (!response) { specErrors++; continue; }

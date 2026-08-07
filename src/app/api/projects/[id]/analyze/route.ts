@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
+import { llmWithRetry } from '@/lib/llm-retry';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -115,7 +116,7 @@ ${focusInstruction}
 HTML to analyze:
 ${project.rawHtml.substring(0, 20000)}`;
 
-      const completion = await zai.chat.completions.create({
+      const completion = await llmWithRetry(zai, {
         messages: [
           { role: 'assistant', content: SYSTEM_PROMPT },
           { role: 'user', content: USER_PROMPT },

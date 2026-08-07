@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
+import { llmWithRetry, sleep } from '@/lib/llm-retry';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -115,7 +116,7 @@ ${focusInstruction}
 HTML to analyze:
 ${project.rawHtml.substring(0, 30000)}`;
 
-  const completion = await zai.chat.completions.create({
+  const completion = await llmWithRetry(zai, {
     messages: [
       { role: 'assistant', content: ANALYZE_SYSTEM_PROMPT },
       { role: 'user', content: USER_PROMPT },
@@ -192,7 +193,7 @@ Inline styles: ${component.inlineStyles || 'N/A'}
 
 Provide a comprehensive spec including props, variants, accessibility notes, and dependencies.`;
 
-      const completion = await zai.chat.completions.create({
+      const completion = await llmWithRetry(zai, {
         messages: [
           { role: 'assistant', content: SPEC_SYSTEM_PROMPT },
           { role: 'user', content: USER_PROMPT },
@@ -202,6 +203,11 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
 
       const response = completion.choices[0]?.message?.content;
       if (!response) { specErrors++; continue; }
+
+      // Throttle between spec calls
+      if (components.indexOf(component) < components.length - 1) {
+        await sleep(1500);
+      }
 
       const cleanedResponse = stripMarkdownFences(response);
 
@@ -273,7 +279,7 @@ ${formatInstructions[codeFormat] || formatInstructions.html}
 
 Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
 
-      const completion = await zai.chat.completions.create({
+      const completion = await llmWithRetry(zai, {
         messages: [
           { role: 'assistant', content: GENERATE_SYSTEM_PROMPT },
           { role: 'user', content: USER_PROMPT },
@@ -283,6 +289,11 @@ Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
 
       const response = completion.choices[0]?.message?.content;
       if (!response) { genErrors++; continue; }
+
+      // Throttle between generate calls
+      if (componentsWithSpecs.indexOf(component) < componentsWithSpecs.length - 1) {
+        await sleep(1500);
+      }
 
       // Reload component to ensure it still exists (guards against race conditions)
       const exists = await db.extractedComponent.findUnique({ where: { id: component.id } });
