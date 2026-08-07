@@ -9,6 +9,7 @@ import { Loader2, Code2, Palette, FileText, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useProjectActions } from "./hooks/use-project-actions";
 import { usePipelineSteps } from "./hooks/use-pipeline-steps";
+import { useRateLimitCooldown } from "./hooks/use-rate-limit-cooldown";
 import { ProjectHeader } from "./project-header";
 import { OverviewTab } from "./overview-tab";
 import { ComponentDetail } from "./component-detail";
@@ -22,6 +23,7 @@ export function ProjectView() {
   const [selectedComponent, setSelectedComponent] = useState<ExtractedComponent | null>(null);
 
   const actions = useProjectActions();
+  const { isCooldown, remaining, triggerCooldown } = useRateLimitCooldown();
   const components = currentProject?.components || [];
   const tokens = currentProject?.tokens || [];
 
@@ -130,8 +132,16 @@ export function ProjectView() {
             onPipeline={actions.runFullPipeline}
             onCopy={actions.copyToClipboard}
             onDismissLogs={() => actions.setPipelineLogs(null)}
-            onRetryExtract={actions.retryExtract}
+            onRetryExtract={async () => {
+              await actions.retryExtract();
+              if (currentProject?.error?.toLowerCase().includes("rate limit")) {
+                triggerCooldown();
+              }
+              // Re-fetch to get updated error
+              await actions.fetchProject();
+            }}
             isRetrying={actions.isRetrying}
+            retryCooldownSeconds={isCooldown ? remaining : 0}
           />
         </TabsContent>
 

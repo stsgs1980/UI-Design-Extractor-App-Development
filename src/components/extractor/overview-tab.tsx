@@ -53,6 +53,7 @@ type OverviewTabProps = {
   onDismissLogs: () => void;
   onRetryExtract: () => void;
   isRetrying: boolean;
+  retryCooldownSeconds: number;
 };
 
 export function OverviewTab({
@@ -72,10 +73,10 @@ export function OverviewTab({
   onDismissLogs,
   onRetryExtract,
   isRetrying,
+  retryCooldownSeconds,
 }: OverviewTabProps) {
   const [rawHtmlOpen, setRawHtmlOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
   const handleCopy = (text: string, id: string) => {
     onCopy(text, id);
     setCopiedId(id);
@@ -101,10 +102,12 @@ export function OverviewTab({
             variant="outline"
             size="sm"
             onClick={onRetryExtract}
-            disabled={isRetrying}
+            disabled={isRetrying || retryCooldownSeconds > 0}
             className="shrink-0"
           >
-            {isRetrying ? (
+            {retryCooldownSeconds > 0 ? (
+              <span className="mr-1.5 text-[11px]">{retryCooldownSeconds}s</span>
+            ) : isRetrying ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
             ) : (
               <RefreshCw className="mr-1.5 h-3.5 w-3.5" />

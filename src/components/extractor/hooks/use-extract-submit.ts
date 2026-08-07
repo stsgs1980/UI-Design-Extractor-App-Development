@@ -19,6 +19,7 @@ export function useExtractSubmit() {
       runFullPipeline: boolean;
       setSteps: React.Dispatch<React.SetStateAction<PipelineStep[]>>;
       updateStep: (id: string, status: PipelineStep["status"]) => void;
+      onRateLimit?: () => void;
     }) => {
       const {
         url,
@@ -29,6 +30,7 @@ export function useExtractSubmit() {
         runFullPipeline,
         setSteps,
         updateStep,
+        onRateLimit,
       } = params;
 
       let parsedUrl: URL;
@@ -125,6 +127,8 @@ export function useExtractSubmit() {
         selectProject(project.id);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
+        const isRateLimit = message.toLowerCase().includes("rate limit");
+        if (isRateLimit) onRateLimit?.();
         toast.error(message);
         setSteps((prev) =>
           prev.map((s) => (s.status === "running" ? { ...s, status: "failed" as const } : s)),

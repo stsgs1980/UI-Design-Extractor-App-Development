@@ -19,6 +19,7 @@ import type { ViewportType, CodeFormat, PipelineStep } from "@/types/extractor";
 import { PIPELINE_STEPS } from "@/types/extractor";
 import { ExtractSidebar } from "./extract-sidebar";
 import { useExtractSubmit } from "./hooks/use-extract-submit";
+import { useRateLimitCooldown } from "./hooks/use-rate-limit-cooldown";
 
 const VIEWPORT_OPTIONS: { value: ViewportType; label: string; icon: React.ElementType }[] = [
   { value: "desktop", label: "Desktop (1280px)", icon: Monitor },
@@ -35,6 +36,7 @@ const FORMAT_OPTIONS: { value: CodeFormat; label: string }[] = [
 export function ExtractView() {
   const { isProcessing } = useExtractorStore();
   const submit = useExtractSubmit();
+  const { isCooldown, remaining, triggerCooldown } = useRateLimitCooldown();
 
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
@@ -65,6 +67,7 @@ export function ExtractView() {
       runFullPipeline,
       setSteps: setCurrentSteps,
       updateStep,
+      onRateLimit: triggerCooldown,
     });
   }
 
@@ -191,8 +194,15 @@ export function ExtractView() {
                   />
                 </button>
               </div>
-              <Button type="submit" className="w-full" disabled={isProcessing} size="lg">
-                {isProcessing ? (
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isProcessing || isCooldown}
+                size="lg"
+              >
+                {isCooldown ? (
+                  `Rate limited — wait ${remaining}s`
+                ) : isProcessing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
                   </>
