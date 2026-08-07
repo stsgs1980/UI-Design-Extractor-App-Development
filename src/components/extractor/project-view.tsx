@@ -24,6 +24,7 @@ import { OverviewTab } from "./overview-tab";
 import { ComponentDetail } from "./component-detail";
 import { TokenGrid } from "./token-grid";
 import { CodeView } from "./code-view";
+import { ComponentList } from "./component-list";
 
 export function ProjectView() {
   const { currentProject, setView } = useExtractorStore();
@@ -179,32 +180,13 @@ export function ProjectView() {
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-5">
-              {/* Component List */}
               <div className="lg:col-span-2">
-                <div className="space-y-1.5">
-                  {components.map((comp) => (
-                    <Button
-                      key={comp.id}
-                      variant={selectedComponent?.id === comp.id ? "secondary" : "ghost"}
-                      className="h-auto w-full justify-start px-3 py-2"
-                      onClick={() => setSelectedComponent(comp)}
-                    >
-                      <div className="flex w-full items-center gap-2">
-                        <Code2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate text-xs">{comp.name}</span>
-                        {comp.spec && (
-                          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-400" />
-                        )}
-                        {comp.generatedCode && (
-                          <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                        )}
-                      </div>
-                    </Button>
-                  ))}
-                </div>
+                <ComponentList
+                  components={components}
+                  selectedId={selectedComponent?.id ?? null}
+                  onSelect={setSelectedComponent}
+                />
               </div>
-
-              {/* Component Detail */}
               <div className="lg:col-span-3">
                 {selectedComponent ? (
                   <ComponentDetail

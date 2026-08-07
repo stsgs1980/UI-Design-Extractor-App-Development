@@ -26,6 +26,9 @@ import { SaveReferenceDialog } from "./save-reference-dialog";
 
 SyntaxHighlighter.registerLanguage("html", html);
 
+const TAB_CLS =
+  "data-[state=active]:bg-background data-[state=active]:border-primary h-7 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:shadow-sm";
+
 type ComponentDetailProps = {
   component: ExtractedComponent;
   project: { id: string; pageCss: string | null; rawHtml: string | null } | null;
@@ -74,31 +77,19 @@ export function ComponentDetail({
       <CardContent className="pt-0">
         <Tabs value={compDetailTab} onValueChange={setCompDetailTab}>
           <TabsList className="bg-muted/50 h-8 w-full justify-start p-0">
-            <TabsTrigger
-              value="preview"
-              className="data-[state=active]:bg-background data-[state=active]:border-primary h-7 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:shadow-sm"
-            >
+            <TabsTrigger value="preview" className={TAB_CLS}>
               <Eye className="mr-1.5 h-3 w-3" /> Preview
             </TabsTrigger>
-            <TabsTrigger
-              value="html"
-              className="data-[state=active]:bg-background data-[state=active]:border-primary h-7 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:shadow-sm"
-            >
+            <TabsTrigger value="html" className={TAB_CLS}>
               <Code2 className="mr-1.5 h-3 w-3" /> HTML
             </TabsTrigger>
             {component.spec && (
-              <TabsTrigger
-                value="spec"
-                className="data-[state=active]:bg-background data-[state=active]:border-primary h-7 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:shadow-sm"
-              >
+              <TabsTrigger value="spec" className={TAB_CLS}>
                 <FileText className="mr-1.5 h-3 w-3" /> Spec
               </TabsTrigger>
             )}
             {component.generatedCode && (
-              <TabsTrigger
-                value="code"
-                className="data-[state=active]:bg-background data-[state=active]:border-primary h-7 rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:shadow-sm"
-              >
+              <TabsTrigger value="code" className={TAB_CLS}>
                 <FileCode2 className="mr-1.5 h-3 w-3" /> Code
               </TabsTrigger>
             )}
