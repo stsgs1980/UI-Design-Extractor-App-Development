@@ -44,17 +44,17 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'No components to generate specs for' }, { status: 400 });
     }
 
-    // Update status to speccing
     await db.project.update({
       where: { id },
       data: { status: 'speccing' },
     });
 
-    try {
-      const zai = await ZAI.create();
-      const updatedComponents = [];
+    const zai = await ZAI.create();
+    let specErrors = 0;
+    const updatedComponents = [];
 
-      for (const component of project.components) {
+    for (const component of project.components) {
+      try {
         const USER_PROMPT = `Generate a detailed specification for this UI component.
 
 Component name: ${component.name}
@@ -75,27 +75,20 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
         });
 
         const response = completion.choices[0]?.message?.content;
-        if (!response) continue;
+        if (!response) { specErrors++; continue; }
 
         const cleanedResponse = stripMarkdownFences(response);
 
-        // Validate it's parseable JSON
+        // Verify component still exists
+        const exists = await db.extractedComponent.findUnique({ where: { id: component.id } });
+        if (!exists) { specErrors++; continue; }
+
         try {
           JSON.parse(cleanedResponse);
         } catch {
-          // If parsing fails, create a basic spec wrapper
-          const fallbackSpec = JSON.stringify({
-            name: component.name,
-            description: cleanedResponse,
-            props: [],
-            variants: [],
-            accessibility: [],
-            dependencies: [],
-          });
-
           const updated = await db.extractedComponent.update({
             where: { id: component.id },
-            data: { spec: fallbackSpec },
+            data: { spec: JSON.stringify({ name: component.name, description: cleanedResponse, props: [], variants: [], accessibility: [], dependencies: [] }) },
           });
           updatedComponents.push(updated);
           continue;
@@ -106,28 +99,28 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
           data: { spec: cleanedResponse },
         });
         updatedComponents.push(updated);
+      } catch (err) {
+        console.error(`Spec failed for ${component.id} (${component.name}):`, err);
+        specErrors++;
       }
-
-      // Update project status to 'specced' (not 'completed')
-      await db.project.update({
-        where: { id },
-        data: { status: 'specced' },
-      });
-
-      return NextResponse.json({ components: updatedComponents });
-    } catch (specError) {
-      await db.project.update({
-        where: { id },
-        data: {
-          status: 'failed',
-          error: specError instanceof Error ? specError.message : 'Spec generation failed',
-        },
-      });
-      return NextResponse.json(
-        { error: specError instanceof Error ? specError.message : 'Spec generation failed' },
-        { status: 500 }
-      );
     }
+
+    if (specErrors === project.components.length) {
+      await db.project.update({
+        where: { id },
+        data: { status: 'failed', error: 'All component specs failed.' },
+      });
+      return NextResponse.json({ error: 'All component specs failed.' }, { status: 500 });
+    }
+
+    // Set status based on actual results
+    const hasAnySpec = updatedComponents.length > 0;
+    await db.project.update({
+      where: { id },
+      data: { status: hasAnySpec ? 'specced' : 'analyzed' },
+    });
+
+    return NextResponse.json({ components: updatedComponents });
   } catch (error) {
     console.error('Failed to generate specs:', error);
     return NextResponse.json({ error: 'Failed to generate specs' }, { status: 500 });

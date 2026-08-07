@@ -15,17 +15,11 @@ function stripMarkdownFences(text: string): string {
 }
 
 function repairJson(text: string): string {
-  // Step 1: normalize - remove literal newlines/tabs inside JSON strings
-  // (LLMs often put unescaped newlines inside string values)
   let fixed = text.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\t/g, ' ');
-  // Remove control characters
   fixed = fixed.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
-  // Try parse as-is
   try { JSON.parse(fixed); return fixed; } catch {}
-  // Remove trailing comma before } or ]
   fixed = fixed.replace(/,\s*([\]}])/g, '$1');
   try { JSON.parse(fixed); return fixed; } catch {}
-  // Find last complete JSON by trying substrings at each '}'
   let lastAttempt = fixed;
   let pos = fixed.length;
   while (pos > 0) {
@@ -138,17 +132,15 @@ ${project.rawHtml.substring(0, 30000)}`;
   await db.extractedComponent.deleteMany({ where: { projectId } });
   await db.designToken.deleteMany({ where: { projectId } });
 
-  // Filter valid components (html is required, name is required)
   const validComponents = (parsed.components || []).filter(
     (comp: { name?: string; html?: string | null }) =>
       comp.name && comp.html && typeof comp.html === 'string' && comp.html.trim().length > 0
   );
 
   if (validComponents.length === 0) {
-    throw new Error('No valid components found in the analysis. The page may be too simple or the LLM could not parse it.');
+    throw new Error('No valid components found in the analysis.');
   }
 
-  // Create components
   await Promise.all(
     validComponents.map((comp: { name: string; tag?: string | null; html: string; cssClasses?: string | null; inlineStyles?: string | null }) =>
       db.extractedComponent.create({
@@ -164,7 +156,6 @@ ${project.rawHtml.substring(0, 30000)}`;
     )
   );
 
-  // Create tokens
   await Promise.all(
     (parsed.designTokens || []).map((token: { category: string; name: string; value: string; originalVar?: string | null }) =>
       db.designToken.create({
@@ -181,16 +172,16 @@ ${project.rawHtml.substring(0, 30000)}`;
 }
 
 async function runSpec(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>) {
-  const components = await db.extractedComponent.findMany({
-    where: { projectId },
-  });
-
+  const components = await db.extractedComponent.findMany({ where: { projectId } });
   if (components.length === 0) throw new Error('No components to generate specs for');
 
   await db.project.update({ where: { id: projectId }, data: { status: 'speccing' } });
 
+  let specErrors = 0;
+
   for (const component of components) {
-    const USER_PROMPT = `Generate a detailed specification for this UI component.
+    try {
+      const USER_PROMPT = `Generate a detailed specification for this UI component.
 
 Component name: ${component.name}
 HTML tag: ${component.tag || 'N/A'}
@@ -201,36 +192,45 @@ Inline styles: ${component.inlineStyles || 'N/A'}
 
 Provide a comprehensive spec including props, variants, accessibility notes, and dependencies.`;
 
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: SPEC_SYSTEM_PROMPT },
-        { role: 'user', content: USER_PROMPT },
-      ],
-      thinking: { type: 'disabled' },
-    });
+      const completion = await zai.chat.completions.create({
+        messages: [
+          { role: 'assistant', content: SPEC_SYSTEM_PROMPT },
+          { role: 'user', content: USER_PROMPT },
+        ],
+        thinking: { type: 'disabled' },
+      });
 
-    const response = completion.choices[0]?.message?.content;
-    if (!response) continue;
+      const response = completion.choices[0]?.message?.content;
+      if (!response) { specErrors++; continue; }
 
-    const cleanedResponse = stripMarkdownFences(response);
+      const cleanedResponse = stripMarkdownFences(response);
 
-    // Validate JSON, fallback to wrapper
-    try {
-      JSON.parse(cleanedResponse);
-    } catch {
+      // Verify component still exists before updating
+      const exists = await db.extractedComponent.findUnique({ where: { id: component.id } });
+      if (!exists) { specErrors++; continue; }
+
+      try {
+        JSON.parse(cleanedResponse);
+      } catch {
+        await db.extractedComponent.update({
+          where: { id: component.id },
+          data: { spec: JSON.stringify({ name: component.name, description: cleanedResponse, props: [], variants: [], accessibility: [], dependencies: [] }) },
+        });
+        continue;
+      }
+
       await db.extractedComponent.update({
         where: { id: component.id },
-        data: {
-          spec: JSON.stringify({ name: component.name, description: cleanedResponse, props: [], variants: [], accessibility: [], dependencies: [] }),
-        },
+        data: { spec: cleanedResponse },
       });
-      continue;
+    } catch (err) {
+      console.error(`Spec failed for component ${component.id} (${component.name}):`, err);
+      specErrors++;
     }
+  }
 
-    await db.extractedComponent.update({
-      where: { id: component.id },
-      data: { spec: cleanedResponse },
-    });
+  if (specErrors === components.length) {
+    throw new Error(`All ${components.length} component specs failed.`);
   }
 }
 
@@ -256,8 +256,11 @@ async function runGenerate(projectId: string, zai: Awaited<ReturnType<typeof ZAI
     vue: 'Generate a clean Vue 3 SFC (Single File Component) using <template>, <script setup lang="ts">, and <style scoped> tags.',
   };
 
+  let genErrors = 0;
+
   for (const component of componentsWithSpecs) {
-    const USER_PROMPT = `Generate a ${codeFormat.toUpperCase()} component based on this specification:
+    try {
+      const USER_PROMPT = `Generate a ${codeFormat.toUpperCase()} component based on this specification:
 
 Component Specification:
 ${component.spec}
@@ -270,30 +273,45 @@ ${formatInstructions[codeFormat] || formatInstructions.html}
 
 Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
 
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: GENERATE_SYSTEM_PROMPT },
-        { role: 'user', content: USER_PROMPT },
-      ],
-      thinking: { type: 'disabled' },
-    });
+      const completion = await zai.chat.completions.create({
+        messages: [
+          { role: 'assistant', content: GENERATE_SYSTEM_PROMPT },
+          { role: 'user', content: USER_PROMPT },
+        ],
+        thinking: { type: 'disabled' },
+      });
 
-    const response = completion.choices[0]?.message?.content;
-    if (!response) continue;
+      const response = completion.choices[0]?.message?.content;
+      if (!response) { genErrors++; continue; }
 
-    await db.extractedComponent.update({
-      where: { id: component.id },
-      data: {
-        generatedCode: stripMarkdownFences(response),
-        codeFormat,
-      },
-    });
+      // Reload component to ensure it still exists (guards against race conditions)
+      const exists = await db.extractedComponent.findUnique({ where: { id: component.id } });
+      if (!exists) { genErrors++; continue; }
+
+      await db.extractedComponent.update({
+        where: { id: component.id },
+        data: {
+          generatedCode: stripMarkdownFences(response),
+          codeFormat,
+        },
+      });
+    } catch (err) {
+      console.error(`Generate failed for component ${component.id} (${component.name}):`, err);
+      genErrors++;
+    }
+  }
+
+  if (genErrors === componentsWithSpecs.length) {
+    throw new Error(`All ${componentsWithSpecs.length} component generations failed.`);
   }
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
+  const { id } = await context.params;
+  let pipelineFailed = false;
+  let errorMessage = 'Pipeline failed';
+
   try {
-    const { id } = await context.params;
     const body = await request.json();
     const codeFormat = body.codeFormat || 'html';
 
@@ -309,41 +327,78 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const zai = await ZAI.create();
 
     try {
-      // Step 1: Analyze
       await runAnalyze(id, zai, project.componentQuery);
-
-      // Step 2: Spec
       await runSpec(id, zai);
-
-      // Step 3: Generate
       await runGenerate(id, zai, codeFormat);
-
-      // Mark completed and return final state
-      const finalProject = await db.project.update({
-        where: { id },
-        data: { status: 'completed' },
-        include: {
-          components: { orderBy: { createdAt: 'asc' } },
-          tokens: { orderBy: { category: 'asc' } },
-        },
-      });
-
-      return NextResponse.json(finalProject);
     } catch (pipelineError) {
+      pipelineFailed = true;
+      errorMessage = pipelineError instanceof Error ? pipelineError.message : 'Pipeline failed';
+      console.error(`Pipeline failed for project ${id}:`, pipelineError);
+    }
+
+    // Always determine the correct final status based on actual data
+    const finalProject = await db.project.findUnique({
+      where: { id },
+      include: {
+        components: { orderBy: { createdAt: 'asc' } },
+        tokens: { orderBy: { category: 'asc' } },
+      },
+    });
+
+    if (!finalProject) {
+      return NextResponse.json({ error: 'Project disappeared' }, { status: 500 });
+    }
+
+    const hasComponents = finalProject.components.length > 0;
+    const hasSpecs = finalProject.components.some((c) => c.spec);
+    const hasCode = finalProject.components.some((c) => c.generatedCode);
+
+    // Determine the most accurate status
+    let finalStatus: string;
+    let finalError: string | null = null;
+
+    if (hasCode) {
+      finalStatus = 'completed';
+    } else if (hasSpecs) {
+      finalStatus = 'specced';
+    } else if (hasComponents) {
+      finalStatus = 'analyzed';
+    } else {
+      finalStatus = 'failed';
+      finalError = errorMessage;
+    }
+
+    await db.project.update({
+      where: { id },
+      data: {
+        status: finalStatus,
+ ...(finalError ? { error: finalError } : {}),
+      },
+    });
+
+    // Re-fetch with updated status
+    const result = await db.project.findUnique({
+      where: { id },
+      include: {
+        components: { orderBy: { createdAt: 'asc' } },
+        tokens: { orderBy: { category: 'asc' } },
+      },
+    });
+
+    if (pipelineFailed) {
+      return NextResponse.json({ ...result, _partial: true, _error: errorMessage }, { status: 207 });
+    }
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error('Pipeline fatal error:', error);
+    // Last resort: try to set a sane status
+    try {
       await db.project.update({
         where: { id },
-        data: {
-          status: 'failed',
-          error: pipelineError instanceof Error ? pipelineError.message : 'Pipeline failed',
-        },
+        data: { status: 'failed', error: error instanceof Error ? error.message : 'Unknown error' },
       });
-      return NextResponse.json(
-        { error: pipelineError instanceof Error ? pipelineError.message : 'Pipeline failed' },
-        { status: 500 }
-      );
-    }
-  } catch (error) {
-    console.error('Pipeline error:', error);
+    } catch {}
     return NextResponse.json({ error: 'Pipeline failed' }, { status: 500 });
   }
 }
