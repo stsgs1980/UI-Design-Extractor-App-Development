@@ -142,6 +142,38 @@ export function ProjectView() {
   const components = project.components || [];
   const tokens = project.tokens || [];
 
+  // Build preview document with styles from original page
+  const getPreviewDoc = (html: string) => {
+    const styleRe = new RegExp('<style[^>]*>([\\s\\S]*?)<\\/style>', 'gi');
+    const styles = (project.rawHtml?.match(styleRe) || []).join('\n');
+
+    // Extract external stylesheet links and resolve relative URLs
+    const linkRe = new RegExp('<link[^>]*href=["\']([^"\']+?\.css)["\'][^>]*>', 'gi');
+    const baseUrl = project.url?.replace(/\/[^/]*$/, '') || '';
+    const cssLinks: string[] = [];
+    let linkMatch: RegExpExecArray | null;
+    const linkSrc = project.rawHtml || '';
+    const linkReGlobal = new RegExp(linkRe.source, linkRe.flags);
+    while ((linkMatch = linkReGlobal.exec(linkSrc)) !== null) {
+      let href = linkMatch[1];
+      if (href.startsWith('//')) href = 'https:' + href;
+      else if (href.startsWith('/')) href = baseUrl + href;
+      else if (!href.startsWith('http')) href = baseUrl + '/' + href;
+      cssLinks.push(`<link rel="stylesheet" href="${href}">`);
+    }
+
+    return `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+${cssLinks.join('\n')}
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; padding: 12px; }
+  img { max-width: 100%; height: auto; }
+  ${styles}
+</style>
+</head><body>${html}</body></html>`;
+  };
+
   // Pipeline step completion based on actual data presence
   const extractDone = !!project.rawHtml;
   const analyzeDone = components.length > 0;
@@ -654,9 +686,8 @@ export function ProjectView() {
                             <div className="h-2 w-2 rounded-full bg-green-400" />
                           </div>
                           <iframe
-                            srcDoc={selectedComponent.html}
+                            srcDoc={getPreviewDoc(selectedComponent.html)}
                             className="w-full h-64 border-0"
-                            sandbox="allow-same-origin"
                             title={`${selectedComponent.name} preview`}
                           />
                         </div>
