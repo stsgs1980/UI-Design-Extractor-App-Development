@@ -453,6 +453,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       where: { id },
       data: {
         status: finalStatus,
+        pipelineLogs: JSON.stringify(logs),
         ...(finalError ? { error: finalError } : {}),
       },
     });
@@ -478,7 +479,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     try {
       await db.project.update({
         where: { id },
-        data: { status: 'failed', error: msg },
+        data: { status: 'failed', error: msg, pipelineLogs: JSON.stringify(logs) },
       });
     } catch {}
     return NextResponse.json({ error: msg, _logs: logs }, { status: 500 });

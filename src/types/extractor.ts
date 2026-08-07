@@ -27,6 +27,7 @@ export interface Project {
   rawHtml: string | null;
   pageTitle: string | null;
   error: string | null;
+  pipelineLogs: string | null;
   createdAt: string;
   updatedAt: string;
   components?: ExtractedComponent[];

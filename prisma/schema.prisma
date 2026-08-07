@@ -18,6 +18,7 @@ model Project {
   rawHtml     String?
   pageTitle   String?
   error       String?
+  pipelineLogs String?  // JSON array of pipeline log entries
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

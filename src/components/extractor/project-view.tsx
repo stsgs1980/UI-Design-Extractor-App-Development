@@ -94,6 +94,17 @@ export function ProjectView() {
   useEffect(() => {
     setCompDetailTab('preview');
   }, [selectedComponent?.id]);
+
+  // Load persisted logs from project data
+  useEffect(() => {
+    if (currentProject?.pipelineLogs) {
+      try {
+        setPipelineLogs(JSON.parse(currentProject.pipelineLogs));
+      } catch { /* ignore */ }
+    } else {
+      setPipelineLogs(null);
+    }
+  }, [currentProject?.pipelineLogs]);
   const [refName, setRefName] = useState('');
   const [refTags, setRefTags] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
