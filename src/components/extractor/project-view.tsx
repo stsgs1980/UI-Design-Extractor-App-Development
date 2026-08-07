@@ -81,6 +81,7 @@ export function ProjectView() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSpecing, setIsSpecing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const [codeFormat, setCodeFormat] = useState<CodeFormat>('html');
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [refName, setRefName] = useState('');
@@ -142,14 +143,16 @@ export function ProjectView() {
     } else if (stepDataDone[stepIndex]) {
       status = 'completed';
     } else if (
+      (project.status === 'extracting' && step.id === 'extract') ||
       (project.status === 'analyzing' && step.id === 'analyze') ||
       (project.status === 'speccing' && step.id === 'spec') ||
-      (project.status === 'generating' && step.id === 'generate') ||
-      (project.status === 'extracting' && step.id === 'extract')
+      (project.status === 'generating' && step.id === 'generate')
     ) {
       status = 'running';
-    } else if (project.status === 'completed') {
-      status = 'completed';
+    } else if (isPipelineRunning && !stepDataDone[stepIndex]) {
+      // When pipeline is running client-side, show next incomplete step as running
+      const allPrevDone = stepDataDone.slice(0, stepIndex).every(Boolean);
+      if (allPrevDone) status = 'running';
     }
 
     return { ...step, status };
@@ -206,6 +209,7 @@ export function ProjectView() {
 
   async function runFullPipeline() {
     if (!selectedProjectId) return;
+    setIsPipelineRunning(true);
     try {
       const res = await fetch(`/api/projects/${selectedProjectId}/pipeline`, {
         method: 'POST',
@@ -216,7 +220,10 @@ export function ProjectView() {
       await fetchProject();
       toast.success('Full pipeline completed');
     } catch (err) {
+      await fetchProject();
       toast.error(err instanceof Error ? err.message : 'Pipeline failed');
+    } finally {
+      setIsPipelineRunning(false);
     }
   }
 
@@ -302,8 +309,8 @@ export function ProjectView() {
         </div>
         <div className="flex items-center gap-2">
           <PipelineIndicator steps={pipelineSteps} compact />
-          {(project.status === 'extracting' || !project.rawHtml) && (
-            <Button size="sm" onClick={runFullPipeline} disabled={isAnalyzing || isSpecing || isGenerating}>
+          {!['completed', 'generating', 'speccing', 'analyzing', 'extracting'].includes(project.status) && (
+            <Button size="sm" onClick={runFullPipeline} disabled={isPipelineRunning}>
               <Play className="mr-1.5 h-3.5 w-3.5" />
               Run Pipeline
             </Button>

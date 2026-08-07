@@ -107,15 +107,15 @@ export function ExtractView() {
       if (!createRes.ok) {
         const err = await createRes.json();
         const msg = err.error || 'Extraction failed';
+        // Add failed project to store so it appears in Dashboard
+        if (err.id) {
+          addProject(err);
+          selectProject(err.id);
+        }
         throw new Error(msg);
       }
 
       const project = await createRes.json();
-
-      // Double-check: backend may return 200 with failed status
-      if (project.status === 'failed') {
-        throw new Error(project.error || 'Extraction failed');
-      }
 
       addProject(project);
       updateStep('extract', 'completed');
