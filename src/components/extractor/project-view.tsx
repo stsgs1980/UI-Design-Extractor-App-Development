@@ -46,6 +46,7 @@ import {
   Code2,
   Palette,
   FileText,
+  FileCode2,
   Play,
   RotateCcw,
   ArrowLeft,
@@ -84,6 +85,12 @@ export function ProjectView() {
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const [codeFormat, setCodeFormat] = useState<CodeFormat>('html');
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [compDetailTab, setCompDetailTab] = useState('preview');
+
+  // Reset component detail tab when switching components
+  useEffect(() => {
+    setCompDetailTab('preview');
+  }, [selectedComponent?.id]);
   const [refName, setRefName] = useState('');
   const [refTags, setRefTags] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -552,88 +559,132 @@ export function ProjectView() {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    {selectedComponent.cssClasses && (
-                      <div>
-                        <p className="mb-1.5 text-xs font-medium text-muted-foreground">CSS Classes</p>
-                        <div className="flex flex-wrap gap-1">
-                          {selectedComponent.cssClasses.split(' ').filter(Boolean).map((cls) => (
-                            <Badge key={cls} variant="outline" className="text-[10px] font-mono">.{cls}</Badge>
-                          ))}
+                  <CardContent className="pt-0">
+                    <Tabs value={compDetailTab} onValueChange={setCompDetailTab}>
+                      <TabsList className="w-full justify-start h-8 p-0 bg-muted/50">
+                        <TabsTrigger value="preview" className="h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+                          <Eye className="mr-1.5 h-3 w-3" /> Preview
+                        </TabsTrigger>
+                        <TabsTrigger value="html" className="h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+                          <Code2 className="mr-1.5 h-3 w-3" /> HTML
+                        </TabsTrigger>
+                        {selectedComponent.spec && (
+                          <TabsTrigger value="spec" className="h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+                            <FileText className="mr-1.5 h-3 w-3" /> Spec
+                          </TabsTrigger>
+                        )}
+                        {selectedComponent.generatedCode && (
+                          <TabsTrigger value="code" className="h-7 text-xs px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-none border-b-2 border-transparent data-[state=active]:border-primary">
+                            <FileCode2 className="mr-1.5 h-3 w-3" /> Code
+                          </TabsTrigger>
+                        )}
+                      </TabsList>
+
+                      {/* Preview Tab */}
+                      <TabsContent value="preview" className="mt-3">
+                        <div className="rounded-lg border bg-white overflow-hidden">
+                          <div className="flex items-center gap-1.5 px-3 py-2 border-b bg-muted/30">
+                            <div className="h-2 w-2 rounded-full bg-red-400" />
+                            <div className="h-2 w-2 rounded-full bg-yellow-400" />
+                            <div className="h-2 w-2 rounded-full bg-green-400" />
+                          </div>
+                          <iframe
+                            srcDoc={selectedComponent.html}
+                            className="w-full h-64 border-0"
+                            sandbox="allow-same-origin"
+                            title={`${selectedComponent.name} preview`}
+                          />
                         </div>
-                      </div>
-                    )}
-                    {selectedComponent.inlineStyles && (
-                      <div>
-                        <p className="mb-1.5 text-xs font-medium text-muted-foreground">Inline Styles</p>
-                        <pre className="max-h-32 overflow-auto rounded-lg bg-muted/50 p-2 text-[11px] font-mono text-muted-foreground">
-                          {selectedComponent.inlineStyles}
-                        </pre>
-                      </div>
-                    )}
-                    <div>
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <p className="text-xs font-medium text-muted-foreground">HTML Structure</p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2"
-                          onClick={() => copyToClipboard(selectedComponent.html, `comp-${selectedComponent.id}`)}
-                        >
-                          {copiedId === `comp-${selectedComponent.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                        </Button>
-                      </div>
-                      <div className="max-h-48 overflow-auto rounded-lg bg-muted/50 p-3">
-                        <pre className="text-[11px] font-mono text-muted-foreground whitespace-pre-wrap break-all">
-                          {selectedComponent.html}
-                        </pre>
-                      </div>
-                    </div>
-                    {selectedComponent.spec && (
-                      <div>
-                        <p className="mb-1.5 text-xs font-medium text-muted-foreground">Component Spec</p>
-                        <SpecViewer specJson={selectedComponent.spec} />
-                      </div>
-                    )}
-                    {selectedComponent.generatedCode && (
-                      <div>
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <p className="text-xs font-medium text-muted-foreground">
-                            Generated Code ({selectedComponent.codeFormat})
-                          </p>
-                          <div className="flex items-center gap-1">
+                      </TabsContent>
+
+                      {/* HTML Tab */}
+                      <TabsContent value="html" className="mt-3 space-y-3">
+                        {selectedComponent.cssClasses && (
+                          <div>
+                            <p className="mb-1.5 text-xs font-medium text-muted-foreground">CSS Classes</p>
+                            <div className="flex flex-wrap gap-1">
+                              {selectedComponent.cssClasses.split(' ').filter(Boolean).map((cls) => (
+                                <Badge key={cls} variant="outline" className="text-[10px] font-mono">.{cls}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {selectedComponent.inlineStyles && (
+                          <div>
+                            <p className="mb-1.5 text-xs font-medium text-muted-foreground">Inline Styles</p>
+                            <pre className="max-h-32 overflow-auto rounded-lg bg-muted/50 p-2 text-[11px] font-mono text-muted-foreground">
+                              {selectedComponent.inlineStyles}
+                            </pre>
+                          </div>
+                        )}
+                        <div>
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <p className="text-xs font-medium text-muted-foreground">HTML Structure</p>
                             <Button
                               variant="ghost"
                               size="sm"
                               className="h-6 px-2"
-                              onClick={() => copyToClipboard(selectedComponent.generatedCode || '', `gen-${selectedComponent.id}`)}
+                              onClick={() => copyToClipboard(selectedComponent.html, `comp-${selectedComponent.id}`)}
                             >
-                              {copiedId === `gen-${selectedComponent.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2"
-                              onClick={() => downloadCode(selectedComponent.generatedCode || '', `${selectedComponent.name}.${selectedComponent.codeFormat === 'react' ? 'tsx' : selectedComponent.codeFormat === 'vue' ? 'vue' : 'html'}`)}
-                            >
-                              <Download className="h-3 w-3" />
+                              {copiedId === `comp-${selectedComponent.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                             </Button>
                           </div>
+                          <div className="max-h-48 overflow-auto rounded-lg bg-muted/50 p-3">
+                            <pre className="text-[11px] font-mono text-muted-foreground whitespace-pre-wrap break-all">
+                              {selectedComponent.html}
+                            </pre>
+                          </div>
                         </div>
-                        <SyntaxHighlighter
-                          language="html"
-                          style={atomOneDark}
-                          customStyle={{
-                            borderRadius: '8px',
-                            fontSize: '11px',
-                            margin: 0,
-                            maxHeight: '300px',
-                          }}
-                        >
-                          {selectedComponent.generatedCode}
-                        </SyntaxHighlighter>
-                      </div>
-                    )}
+                      </TabsContent>
+
+                      {/* Spec Tab */}
+                      {selectedComponent.spec && (
+                        <TabsContent value="spec" className="mt-3">
+                          <SpecViewer specJson={selectedComponent.spec} />
+                        </TabsContent>
+                      )}
+
+                      {/* Code Tab */}
+                      {selectedComponent.generatedCode && (
+                        <TabsContent value="code" className="mt-3">
+                          <div className="mb-1.5 flex items-center justify-between">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Generated Code ({selectedComponent.codeFormat})
+                            </p>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2"
+                                onClick={() => copyToClipboard(selectedComponent.generatedCode || '', `gen-${selectedComponent.id}`)}
+                              >
+                                {copiedId === `gen-${selectedComponent.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2"
+                                onClick={() => downloadCode(selectedComponent.generatedCode || '', `${selectedComponent.name}.${selectedComponent.codeFormat === 'react' ? 'tsx' : selectedComponent.codeFormat === 'vue' ? 'vue' : 'html'}`)}
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          <SyntaxHighlighter
+                            language="html"
+                            style={atomOneDark}
+                            customStyle={{
+                              borderRadius: '8px',
+                              fontSize: '11px',
+                              margin: 0,
+                              maxHeight: '300px',
+                            }}
+                          >
+                            {selectedComponent.generatedCode}
+                          </SyntaxHighlighter>
+                        </TabsContent>
+                      )}
+                    </Tabs>
                   </CardContent>
                 </Card>
               ) : (
