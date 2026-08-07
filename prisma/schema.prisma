@@ -19,6 +19,7 @@ model Project {
   pageTitle   String?
   error       String?
   pipelineLogs String?  // JSON array of pipeline log entries
+  pageCss     String?  // Combined CSS from original page (inline + fetched external)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
