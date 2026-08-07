@@ -61,7 +61,7 @@ export function ProjectHeader({
           <Trash2 className="h-4 w-4" />
         </Button>
         <PipelineIndicator steps={pipelineSteps} compact />
-        {!RUNNING_STATUSES.includes(project.status) && (
+        {!RUNNING_STATUSES.includes(project.status) && project.rawHtml && (
           <Button size="sm" onClick={onRunPipeline} disabled={isPipelineRunning}>
             <Play className="mr-1.5 h-3.5 w-3.5" /> Run Pipeline
           </Button>

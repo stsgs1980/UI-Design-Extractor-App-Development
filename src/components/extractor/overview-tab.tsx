@@ -15,6 +15,8 @@ import {
   Palette,
   Layers,
   Terminal,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { PipelineStepsDetail } from "./pipeline-indicator";
 import { PipelineLogPanel } from "./pipeline-log-panel";
@@ -22,11 +24,13 @@ import type { ExtractedComponent, PipelineStep } from "@/types/extractor";
 
 type OverviewTabProps = {
   project: {
+    id: string;
     name: string;
     url: string;
     status: string;
     rawHtml: string | null;
     pageTitle: string | null;
+    error: string | null;
   };
   components: ExtractedComponent[];
   tokensCount: number;
@@ -47,6 +51,8 @@ type OverviewTabProps = {
   onPipeline: () => void;
   onCopy: (text: string, id: string) => void;
   onDismissLogs: () => void;
+  onRetryExtract: () => void;
+  isRetrying: boolean;
 };
 
 export function OverviewTab({
@@ -64,6 +70,8 @@ export function OverviewTab({
   onPipeline,
   onCopy,
   onDismissLogs,
+  onRetryExtract,
+  isRetrying,
 }: OverviewTabProps) {
   const [rawHtmlOpen, setRawHtmlOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -74,8 +82,38 @@ export function OverviewTab({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const isFailed = project.status === "failed" || !project.rawHtml;
+
   return (
     <>
+      {/* Error Banner */}
+      {isFailed && (
+        <div className="border-destructive/30 bg-destructive/5 flex items-start gap-3 rounded-lg border p-4">
+          <AlertTriangle className="text-destructive mt-0.5 h-4 w-4 shrink-0" />
+          <div className="flex-1">
+            <p className="text-destructive text-sm font-medium">Extraction failed</p>
+            <p className="text-muted-foreground mt-1 text-xs">
+              {project.error ||
+                "Page could not be fetched. The site may be unreachable or blocking automated requests."}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRetryExtract}
+            disabled={isRetrying}
+            className="shrink-0"
+          >
+            {isRetrying ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Retry
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="bg-card/50 backdrop-blur-sm">
           <CardContent className="p-4">

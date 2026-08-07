@@ -11,6 +11,7 @@ export function useProjectActions() {
   const [isSpecing, setIsSpecing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [codeFormat, setCodeFormat] = useState<CodeFormat>("html");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [refName, setRefName] = useState("");
@@ -82,6 +83,22 @@ export function useProjectActions() {
       toast.error(err instanceof Error ? err.message : "Generation failed");
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function retryExtract() {
+    if (!selectedProjectId) return;
+    setIsRetrying(true);
+    try {
+      const res = await fetch(`/api/projects/${selectedProjectId}/re-extract`, { method: "POST" });
+      if (!res.ok) throw new Error((await res.json()).error || "Retry failed");
+      await fetchProject();
+      toast.success("Page extracted successfully");
+    } catch (err) {
+      await fetchProject();
+      toast.error(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      setIsRetrying(false);
     }
   }
 
@@ -191,5 +208,7 @@ export function useProjectActions() {
     refTags,
     setRefTags,
     removeProjectFromStore: removeProject,
+    retryExtract,
+    isRetrying,
   };
 }

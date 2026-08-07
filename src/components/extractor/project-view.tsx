@@ -130,6 +130,8 @@ export function ProjectView() {
             onPipeline={actions.runFullPipeline}
             onCopy={actions.copyToClipboard}
             onDismissLogs={() => actions.setPipelineLogs(null)}
+            onRetryExtract={actions.retryExtract}
+            isRetrying={actions.isRetrying}
           />
         </TabsContent>
 
