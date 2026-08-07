@@ -101,7 +101,16 @@ export const useExtractorStore = create<ExtractorState>((set, get) => ({
   // Actions - Data
   setProjects: (projects) => set({ projects }),
   setCurrentProject: (project) => set({ currentProject: project }),
-  addProject: (project) => set((s) => ({ projects: [project, ...s.projects] })),
+  addProject: (project) =>
+    set((s) => {
+      const idx = s.projects.findIndex((p) => p.id === project.id);
+      return {
+        projects:
+          idx >= 0
+            ? s.projects.map((p) => (p.id === project.id ? { ...p, ...project } : p))
+            : [project, ...s.projects],
+      };
+    }),
   updateProject: (id, updates) =>
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
