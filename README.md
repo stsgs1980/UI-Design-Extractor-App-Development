@@ -1,4 +1,4 @@
-# UI Extractor
+# UI-Design-Extractor-App-Development
 
 AI-powered tool that deconstructs any public website into reusable UI components, design tokens, and specifications. Feed it a URL, and the four-stage pipeline produces clean, production-ready code in HTML, React JSX, or Vue SFC format.
 
