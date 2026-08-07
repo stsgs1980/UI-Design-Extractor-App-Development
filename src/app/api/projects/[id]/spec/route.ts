@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import ZAI from 'z-ai-web-dev-sdk';
-import { llmWithRetry, sleep } from '@/lib/llm-retry';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import ZAI from "z-ai-web-dev-sdk";
+import { llmWithRetry, sleep } from "@/lib/llm-retry";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -23,8 +23,8 @@ The JSON must have this exact structure:
 
 function stripMarkdownFences(text: string): string {
   return text
-    .replace(/```json\n?/g, '')
-    .replace(/```\n?/g, '')
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
     .trim();
 }
 
@@ -38,16 +38,16 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     });
 
     if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     if (project.components.length === 0) {
-      return NextResponse.json({ error: 'No components to generate specs for' }, { status: 400 });
+      return NextResponse.json({ error: "No components to generate specs for" }, { status: 400 });
     }
 
     await db.project.update({
       where: { id },
-      data: { status: 'speccing' },
+      data: { status: "SPECCING" },
     });
 
     const zai = await ZAI.create();
@@ -59,20 +59,20 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         const USER_PROMPT = `Generate a detailed specification for this UI component.
 
 Component name: ${component.name}
-HTML tag: ${component.tag || 'N/A'}
+HTML tag: ${component.tag || "N/A"}
 HTML:
 ${component.html}
-CSS classes: ${component.cssClasses || 'N/A'}
-Inline styles: ${component.inlineStyles || 'N/A'}
+CSS classes: ${component.cssClasses || "N/A"}
+Inline styles: ${component.inlineStyles || "N/A"}
 
 Provide a comprehensive spec including props, variants, accessibility notes, and dependencies.`;
 
         const completion = await llmWithRetry(zai, {
           messages: [
-            { role: 'assistant', content: SYSTEM_PROMPT },
-            { role: 'user', content: USER_PROMPT },
+            { role: "assistant", content: SYSTEM_PROMPT },
+            { role: "user", content: USER_PROMPT },
           ],
-          thinking: { type: 'disabled' },
+          thinking: { type: "disabled" },
         });
 
         // Throttle between component spec calls
@@ -81,20 +81,35 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
         }
 
         const response = completion.choices[0]?.message?.content;
-        if (!response) { specErrors++; continue; }
+        if (!response) {
+          specErrors++;
+          continue;
+        }
 
         const cleanedResponse = stripMarkdownFences(response);
 
         // Verify component still exists
         const exists = await db.extractedComponent.findUnique({ where: { id: component.id } });
-        if (!exists) { specErrors++; continue; }
+        if (!exists) {
+          specErrors++;
+          continue;
+        }
 
         try {
           JSON.parse(cleanedResponse);
         } catch {
           const updated = await db.extractedComponent.update({
             where: { id: component.id },
-            data: { spec: JSON.stringify({ name: component.name, description: cleanedResponse, props: [], variants: [], accessibility: [], dependencies: [] }) },
+            data: {
+              spec: JSON.stringify({
+                name: component.name,
+                description: cleanedResponse,
+                props: [],
+                variants: [],
+                accessibility: [],
+                dependencies: [],
+              }),
+            },
           });
           updatedComponents.push(updated);
           continue;
@@ -114,21 +129,21 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
     if (specErrors === project.components.length) {
       await db.project.update({
         where: { id },
-        data: { status: 'failed', error: 'All component specs failed.' },
+        data: { status: "FAILED", error: "All component specs failed." },
       });
-      return NextResponse.json({ error: 'All component specs failed.' }, { status: 500 });
+      return NextResponse.json({ error: "All component specs failed." }, { status: 500 });
     }
 
     // Set status based on actual results
     const hasAnySpec = updatedComponents.length > 0;
     await db.project.update({
       where: { id },
-      data: { status: hasAnySpec ? 'specced' : 'analyzed' },
+      data: { status: hasAnySpec ? "SPECCED" : "ANALYZED" },
     });
 
     return NextResponse.json({ components: updatedComponents });
   } catch (error) {
-    console.error('Failed to generate specs:', error);
-    return NextResponse.json({ error: 'Failed to generate specs' }, { status: 500 });
+    console.error("Failed to generate specs:", error);
+    return NextResponse.json({ error: "Failed to generate specs" }, { status: 500 });
   }
 }

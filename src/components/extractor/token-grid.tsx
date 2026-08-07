@@ -81,9 +81,9 @@ export function TokenGrid({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="html">HTML</SelectItem>
-            <SelectItem value="react">React JSX</SelectItem>
-            <SelectItem value="vue">Vue SFC</SelectItem>
+            <SelectItem value="HTML">HTML</SelectItem>
+            <SelectItem value="REACT">React JSX</SelectItem>
+            <SelectItem value="VUE">Vue SFC</SelectItem>
           </SelectContent>
         </Select>
         <Button onClick={onGenerateCode} disabled={isGeneratingCode} size="sm">

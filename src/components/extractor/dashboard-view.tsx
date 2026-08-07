@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from "react";
 import { useExtractorStore } from "@/store/extractor-store";
-import { STATUS_COLORS, type Project } from "@/types/extractor";
+import { type Project } from "@/types/extractor";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,7 +59,7 @@ export function DashboardView() {
   }, [fetchProjects, fetchReferences]);
 
   const safeProjects = projects || [];
-  const completedCount = safeProjects.filter((p) => p.status === "completed").length;
+  const completedCount = safeProjects.filter((p) => p.status === "COMPLETED").length;
   const getCount = (p: Project, key: string) => {
     const c = (p as unknown as Record<string, Record<string, number>>)._count;
     return c ? c[key] || 0 : 0;

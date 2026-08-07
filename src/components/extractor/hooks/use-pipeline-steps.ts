@@ -15,22 +15,22 @@ export function usePipelineSteps(
   const generateDone = components.some((c) => c.generatedCode);
   const stepDataDone = [extractDone, analyzeDone, specDone, generateDone];
   const stepOrder = ["extract", "analyze", "spec", "generate"];
-  const failedAtIndex = projectStatus === "failed" ? stepDataDone.findIndex((done) => !done) : -1;
+  const failedAtIndex = projectStatus === "FAILED" ? stepDataDone.findIndex((done) => !done) : -1;
 
   const pipelineSteps: PipelineStep[] = PIPELINE_STEPS.map((step) => {
     let status: PipelineStep["status"] = "pending";
     const stepIndex = stepOrder.indexOf(step.id);
 
-    if (projectStatus === "failed") {
+    if (projectStatus === "FAILED") {
       if (stepIndex < failedAtIndex) status = "completed";
       else if (stepIndex === failedAtIndex) status = "failed";
     } else if (stepDataDone[stepIndex]) {
       status = "completed";
     } else if (
-      (projectStatus === "extracting" && step.id === "extract") ||
-      (projectStatus === "analyzing" && step.id === "analyze") ||
-      (projectStatus === "speccing" && step.id === "spec") ||
-      (projectStatus === "generating" && step.id === "generate")
+      (projectStatus === "EXTRACTING" && step.id === "extract") ||
+      (projectStatus === "ANALYZING" && step.id === "analyze") ||
+      (projectStatus === "SPECCING" && step.id === "spec") ||
+      (projectStatus === "GENERATING" && step.id === "generate")
     ) {
       status = "running";
     } else if (isPipelineRunning && !stepDataDone[stepIndex]) {

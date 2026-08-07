@@ -28,7 +28,7 @@ export function ProjectView() {
   const tokens = currentProject?.tokens || [];
 
   const pipelineSteps = usePipelineSteps(
-    currentProject?.status || "pending",
+    currentProject?.status || "PENDING",
     currentProject?.rawHtml || null,
     components,
     actions.isPipelineRunning,

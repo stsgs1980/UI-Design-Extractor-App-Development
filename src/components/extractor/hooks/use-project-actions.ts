@@ -12,7 +12,7 @@ export function useProjectActions() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-  const [codeFormat, setCodeFormat] = useState<CodeFormat>("html");
+  const [codeFormat, setCodeFormat] = useState<CodeFormat>("HTML");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [refName, setRefName] = useState("");
   const [refTags, setRefTags] = useState("");

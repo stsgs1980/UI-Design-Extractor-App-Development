@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { fetchPageWithRetry, PageFetchError } from "@/lib/page-fetch";
+import { createProjectSchema } from "@/lib/validations";
 
 export async function GET() {
   try {
@@ -32,11 +33,11 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { url, name, componentQuery, viewport } = body;
-
-    if (!url) {
-      return NextResponse.json({ error: "URL is required" }, { status: 400 });
+    const parsed = createProjectSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
     }
+    const { url, name, componentQuery, viewport } = parsed.data;
 
     const projectName = name || new URL(url).hostname;
 
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     });
 
     // If an existing project already has extracted HTML, return it
-    if (existing && existing.rawHtml && existing.status !== "failed") {
+    if (existing && existing.rawHtml && existing.status !== "FAILED") {
       return NextResponse.json({
         id: existing.id,
         name: existing.name,
@@ -63,11 +64,11 @@ export async function POST(request: NextRequest) {
     }
 
     // If existing project exists but failed or has no HTML, re-extract into it
-    if (existing && (!existing.rawHtml || existing.status === "failed")) {
+    if (existing && (!existing.rawHtml || existing.status === "FAILED")) {
       try {
         await db.project.update({
           where: { id: existing.id },
-          data: { status: "extracting", error: null },
+          data: { status: "EXTRACTING", error: null },
         });
 
         const { title: pageTitle, html: rawHtml } = await fetchPageWithRetry(url);
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
           data: {
             pageTitle,
             rawHtml,
-            status: "extracted",
+            status: "EXTRACTED",
             name: projectName,
             componentQuery: componentQuery || existing.componentQuery,
             viewport: viewport || existing.viewport,
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
 
         await db.project.update({
           where: { id: existing.id },
-          data: { status: "failed", error: userMessage },
+          data: { status: "FAILED", error: userMessage },
         });
 
         return NextResponse.json(
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
             id: existing.id,
             name: existing.name,
             url: existing.url,
-            status: "failed",
+            status: "FAILED",
             error: userMessage,
             createdAt: existing.createdAt,
             updatedAt: existing.updatedAt,
@@ -125,9 +126,9 @@ export async function POST(request: NextRequest) {
       data: {
         name: projectName,
         url,
-        status: "extracting",
+        status: "EXTRACTING",
         componentQuery: componentQuery || null,
-        viewport: viewport || "desktop",
+        viewport: viewport || "DESKTOP",
       },
     });
 
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
 
       const updatedProject = await db.project.update({
         where: { id: project.id },
-        data: { pageTitle, rawHtml, status: "extracted" },
+        data: { pageTitle, rawHtml, status: "EXTRACTED" },
       });
 
       return NextResponse.json({
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
 
       await db.project.update({
         where: { id: project.id },
-        data: { status: "failed", error: userMessage },
+        data: { status: "FAILED", error: userMessage },
       });
 
       return NextResponse.json(
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
           id: project.id,
           name: project.name,
           url: project.url,
-          status: "failed",
+          status: "FAILED",
           error: userMessage,
           createdAt: project.createdAt,
           updatedAt: project.updatedAt,

@@ -1,17 +1,17 @@
 export type ProjectStatus =
-  | "pending"
-  | "extracting"
-  | "extracted"
-  | "analyzing"
-  | "analyzed"
-  | "speccing"
-  | "specced"
-  | "generating"
-  | "completed"
-  | "failed";
+  | "PENDING"
+  | "EXTRACTING"
+  | "EXTRACTED"
+  | "ANALYZING"
+  | "ANALYZED"
+  | "SPECCING"
+  | "SPECCED"
+  | "GENERATING"
+  | "COMPLETED"
+  | "FAILED";
 
-export type ViewportType = "desktop" | "mobile" | "tablet";
-export type CodeFormat = "html" | "react" | "vue";
+export type ViewportType = "DESKTOP" | "MOBILE" | "TABLET";
+export type CodeFormat = "HTML" | "REACT" | "VUE";
 export type TokenCategory =
   "color" | "spacing" | "typography" | "border-radius" | "shadow" | "opacity";
 
@@ -139,16 +139,16 @@ export const PIPELINE_STEPS: PipelineStep[] = [
 ];
 
 export const STATUS_COLORS: Record<ProjectStatus, string> = {
-  pending: "bg-muted text-muted-foreground",
-  extracting: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  extracted: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  analyzing: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  analyzed: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  speccing: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  specced: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  generating: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  completed: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  failed: "bg-destructive/10 text-destructive",
+  PENDING: "bg-muted text-muted-foreground",
+  EXTRACTING: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  EXTRACTED: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  ANALYZING: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  ANALYZED: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  SPECCING: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  SPECCED: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  GENERATING: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  COMPLETED: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  FAILED: "bg-destructive/10 text-destructive",
 };
 
 export const TOKEN_CATEGORY_ICONS: Record<TokenCategory, string> = {

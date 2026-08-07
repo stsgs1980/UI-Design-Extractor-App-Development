@@ -75,7 +75,7 @@ export function useExtractSubmit() {
         addProject(project);
         updateStep("extract", "completed");
 
-        if (project.status === "completed" && !runFullPipeline) {
+        if (project.status === "COMPLETED" && !runFullPipeline) {
           toast.success("This URL was already extracted. Navigating to existing project.");
           selectProject(project.id);
           setProcessing(false);

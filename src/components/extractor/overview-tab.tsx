@@ -83,7 +83,7 @@ export function OverviewTab({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const isFailed = project.status === "failed" || !project.rawHtml;
+  const isFailed = project.status === "FAILED" || !project.rawHtml;
 
   return (
     <>

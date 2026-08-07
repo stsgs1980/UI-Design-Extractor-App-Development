@@ -197,7 +197,7 @@ export function ComponentDetail({
                     onClick={() =>
                       onDownload(
                         component.generatedCode || "",
-                        `${component.name}.${component.codeFormat === "react" ? "tsx" : component.codeFormat === "vue" ? "vue" : "html"}`,
+                        `${component.name}.${component.codeFormat === "REACT" ? "tsx" : component.codeFormat === "VUE" ? "vue" : "html"}`,
                       )
                     }
                   >

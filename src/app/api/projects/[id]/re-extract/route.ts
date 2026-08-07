@@ -16,14 +16,14 @@ export async function POST(_request: NextRequest, context: RouteContext) {
 
     await db.project.update({
       where: { id },
-      data: { status: "extracting", error: null, pageCss: null },
+      data: { status: "EXTRACTING", error: null, pageCss: null },
     });
 
     const { title: pageTitle, html: rawHtml } = await fetchPageWithRetry(project.url);
 
     const updated = await db.project.update({
       where: { id },
-      data: { pageTitle, rawHtml, status: "extracted" },
+      data: { pageTitle, rawHtml, status: "EXTRACTED" },
     });
     return NextResponse.json(updated);
   } catch (err) {
@@ -39,7 +39,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       const { id } = await context.params;
       await db.project.update({
         where: { id },
-        data: { status: "failed", error: userMessage },
+        data: { status: "FAILED", error: userMessage },
       });
     } catch {
       // Project update failed, just return the error

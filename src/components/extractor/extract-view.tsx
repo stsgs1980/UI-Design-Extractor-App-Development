@@ -22,15 +22,15 @@ import { useExtractSubmit } from "./hooks/use-extract-submit";
 import { useRateLimitCooldown } from "./hooks/use-rate-limit-cooldown";
 
 const VIEWPORT_OPTIONS: { value: ViewportType; label: string; icon: React.ElementType }[] = [
-  { value: "desktop", label: "Desktop (1280px)", icon: Monitor },
-  { value: "tablet", label: "Tablet (768px)", icon: Tablet },
-  { value: "mobile", label: "Mobile (375px)", icon: Smartphone },
+  { value: "DESKTOP", label: "Desktop (1280px)", icon: Monitor },
+  { value: "TABLET", label: "Tablet (768px)", icon: Tablet },
+  { value: "MOBILE", label: "Mobile (375px)", icon: Smartphone },
 ];
 
 const FORMAT_OPTIONS: { value: CodeFormat; label: string }[] = [
-  { value: "html", label: "HTML" },
-  { value: "react", label: "React JSX" },
-  { value: "vue", label: "Vue SFC" },
+  { value: "HTML", label: "HTML" },
+  { value: "REACT", label: "React JSX" },
+  { value: "VUE", label: "Vue SFC" },
 ];
 
 export function ExtractView() {
@@ -41,8 +41,8 @@ export function ExtractView() {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [componentQuery, setComponentQuery] = useState("");
-  const [viewport, setViewport] = useState<ViewportType>("desktop");
-  const [codeFormat, setCodeFormat] = useState<CodeFormat>("html");
+  const [viewport, setViewport] = useState<ViewportType>("DESKTOP");
+  const [codeFormat, setCodeFormat] = useState<CodeFormat>("HTML");
   const [runFullPipeline, setRunFullPipeline] = useState(true);
   const [currentSteps, setCurrentSteps] = useState<PipelineStep[]>(
     PIPELINE_STEPS.map((s) => ({ ...s, status: "pending" })),
@@ -162,9 +162,9 @@ export function ExtractView() {
                         {FORMAT_OPTIONS.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
                             <div className="flex items-center gap-2">
-                              {opt.value === "html" && <FileCode className="h-3.5 w-3.5" />}
-                              {opt.value === "react" && <Code2 className="h-3.5 w-3.5" />}
-                              {opt.value === "vue" && <FileCode className="h-3.5 w-3.5" />}
+                              {opt.value === "HTML" && <FileCode className="h-3.5 w-3.5" />}
+                              {opt.value === "REACT" && <Code2 className="h-3.5 w-3.5" />}
+                              {opt.value === "VUE" && <FileCode className="h-3.5 w-3.5" />}
                               {opt.label}
                             </div>
                           </SelectItem>

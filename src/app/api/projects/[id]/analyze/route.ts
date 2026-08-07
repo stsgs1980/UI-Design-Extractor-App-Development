@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import ZAI from 'z-ai-web-dev-sdk';
-import { llmWithRetry } from '@/lib/llm-retry';
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import ZAI from "z-ai-web-dev-sdk";
+import { llmWithRetry } from "@/lib/llm-retry";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -36,36 +36,62 @@ The JSON must have this exact structure:
 
 function stripMarkdownFences(text: string): string {
   return text
-    .replace(/```json\n?/g, '')
-    .replace(/```\n?/g, '')
+    .replace(/```json\n?/g, "")
+    .replace(/```\n?/g, "")
     .trim();
 }
 
 function repairJson(text: string): string {
-  let fixed = text.replace(/\r\n/g, ' ').replace(/\n/g, ' ').replace(/\t/g, ' ');
-  fixed = fixed.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
-  try { JSON.parse(fixed); return fixed; } catch {}
-  fixed = fixed.replace(/,\s*([\]}])/g, '$1');
-  try { JSON.parse(fixed); return fixed; } catch {}
+  let fixed = text.replace(/\r\n/g, " ").replace(/\n/g, " ").replace(/\t/g, " ");
+  fixed = fixed.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+  try {
+    JSON.parse(fixed);
+    return fixed;
+  } catch {}
+  fixed = fixed.replace(/,\s*([\]}])/g, "$1");
+  try {
+    JSON.parse(fixed);
+    return fixed;
+  } catch {}
   let lastAttempt = fixed;
   let pos = fixed.length;
   while (pos > 0) {
-    pos = fixed.lastIndexOf('}', pos - 1);
+    pos = fixed.lastIndexOf("}", pos - 1);
     if (pos < 0) break;
     let candidate = fixed.substring(0, pos + 1);
-    let ob = 0, oc = 0, inStr = false, escaped = false;
+    let ob = 0,
+      oc = 0,
+      inStr = false,
+      escaped = false;
     for (let i = 0; i < candidate.length; i++) {
       const ch = candidate[i];
-      if (escaped) { escaped = false; continue; }
-      if (ch === '\\') { escaped = true; continue; }
-      if (ch === '"') { inStr = !inStr; continue; }
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = !inStr;
+        continue;
+      }
       if (inStr) continue;
-      if (ch === '[') ob++; if (ch === ']') ob--;
-      if (ch === '{') oc++; if (ch === '}') oc--;
+      if (ch === "[") ob++;
+      if (ch === "]") ob--;
+      if (ch === "{") oc++;
+      if (ch === "}") oc--;
     }
     if (inStr) candidate += '"';
-    while (oc > 0) { candidate += '}'; oc--; }
-    while (ob > 0) { candidate += ']'; ob--; }
+    while (oc > 0) {
+      candidate += "}";
+      oc--;
+    }
+    while (ob > 0) {
+      candidate += "]";
+      ob--;
+    }
     try {
       const parsed = JSON.parse(candidate);
       lastAttempt = candidate;
@@ -85,17 +111,20 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     });
 
     if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     if (!project.rawHtml) {
-      return NextResponse.json({ error: 'No HTML data to analyze. Extract the page first.' }, { status: 400 });
+      return NextResponse.json(
+        { error: "No HTML data to analyze. Extract the page first." },
+        { status: 400 },
+      );
     }
 
     // Update status to analyzing
     await db.project.update({
       where: { id },
-      data: { status: 'analyzing' },
+      data: { status: "ANALYZING" },
     });
 
     try {
@@ -104,7 +133,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       // Build focus instruction from componentQuery
       const focusInstruction = project.componentQuery
         ? `\n\nIMPORTANT: Focus ONLY on these component types: ${project.componentQuery}. Ignore other elements.`
-        : '';
+        : "";
 
       const USER_PROMPT = `Analyze the following HTML and extract all reusable UI components and design tokens.
 
@@ -118,15 +147,15 @@ ${project.rawHtml.substring(0, 20000)}`;
 
       const completion = await llmWithRetry(zai, {
         messages: [
-          { role: 'assistant', content: SYSTEM_PROMPT },
-          { role: 'user', content: USER_PROMPT },
+          { role: "assistant", content: SYSTEM_PROMPT },
+          { role: "user", content: USER_PROMPT },
         ],
-        thinking: { type: 'disabled' },
+        thinking: { type: "disabled" },
       });
 
       const response = completion.choices[0]?.message?.content;
       if (!response) {
-        throw new Error('Empty LLM response');
+        throw new Error("Empty LLM response");
       }
 
       const cleanedResponse = stripMarkdownFences(response);
@@ -139,11 +168,13 @@ ${project.rawHtml.substring(0, 20000)}`;
       // Filter valid components (html is required, name is required)
       const validComponents = (parsed.components || []).filter(
         (comp: { name?: string; html?: string | null }) =>
-          comp.name && comp.html && typeof comp.html === 'string' && comp.html.trim().length > 0
+          comp.name && comp.html && typeof comp.html === "string" && comp.html.trim().length > 0,
       );
 
       if (validComponents.length === 0) {
-        throw new Error('No valid components found in the analysis. The page may be too simple or the LLM could not parse it.');
+        throw new Error(
+          "No valid components found in the analysis. The page may be too simple or the LLM could not parse it.",
+        );
       }
 
       // Create components
@@ -165,13 +196,13 @@ ${project.rawHtml.substring(0, 20000)}`;
               inlineStyles: comp.inlineStyles || null,
             },
           });
-        }
+        },
       );
 
       // Create design tokens (filter invalid entries)
       const validTokens = (parsed.designTokens || []).filter(
         (t: { name?: string; value?: string | null; category?: string | null }) =>
-          t.name && t.value && t.category
+          t.name && t.value && t.category,
       );
 
       const tokenPromises = validTokens.map(
@@ -190,7 +221,7 @@ ${project.rawHtml.substring(0, 20000)}`;
               originalVar: token.originalVar || null,
             },
           });
-        }
+        },
       );
 
       const [createdComponents, createdTokens] = await Promise.all([
@@ -198,10 +229,10 @@ ${project.rawHtml.substring(0, 20000)}`;
         Promise.all(tokenPromises),
       ]);
 
-      // Update project status to 'analyzed' (not 'completed')
+      // Update project status to 'ANALYZED' (not 'COMPLETED')
       await db.project.update({
         where: { id },
-        data: { status: 'analyzed' },
+        data: { status: "ANALYZED" },
       });
 
       return NextResponse.json({
@@ -212,17 +243,17 @@ ${project.rawHtml.substring(0, 20000)}`;
       await db.project.update({
         where: { id },
         data: {
-          status: 'failed',
-          error: analyzeError instanceof Error ? analyzeError.message : 'Analysis failed',
+          status: "FAILED",
+          error: analyzeError instanceof Error ? analyzeError.message : "Analysis failed",
         },
       });
       return NextResponse.json(
-        { error: analyzeError instanceof Error ? analyzeError.message : 'Analysis failed' },
-        { status: 500 }
+        { error: analyzeError instanceof Error ? analyzeError.message : "Analysis failed" },
+        { status: 500 },
       );
     }
   } catch (error) {
-    console.error('Failed to analyze project:', error);
-    return NextResponse.json({ error: 'Failed to analyze project' }, { status: 500 });
+    console.error("Failed to analyze project:", error);
+    return NextResponse.json({ error: "Failed to analyze project" }, { status: 500 });
   }
 }

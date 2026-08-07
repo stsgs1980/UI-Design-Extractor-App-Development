@@ -71,9 +71,9 @@ export function CodeView({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="html">HTML</SelectItem>
-              <SelectItem value="react">React JSX</SelectItem>
-              <SelectItem value="vue">Vue SFC</SelectItem>
+              <SelectItem value="HTML">HTML</SelectItem>
+              <SelectItem value="REACT">React JSX</SelectItem>
+              <SelectItem value="VUE">Vue SFC</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={onGenerate} disabled={isGenerating} size="sm">
@@ -123,7 +123,7 @@ export function CodeView({
                   onClick={() =>
                     onDownload(
                       comp.generatedCode || "",
-                      `${comp.name}.${comp.codeFormat === "react" ? "tsx" : comp.codeFormat === "vue" ? "vue" : "html"}`,
+                      `${comp.name}.${comp.codeFormat === "REACT" ? "tsx" : comp.codeFormat === "VUE" ? "vue" : "html"}`,
                     )
                   }
                 >
@@ -135,7 +135,7 @@ export function CodeView({
           <CardContent>
             <SyntaxHighlighter
               language={
-                comp.codeFormat === "react" ? "jsx" : comp.codeFormat === "vue" ? "xml" : "html"
+                comp.codeFormat === "REACT" ? "jsx" : comp.codeFormat === "VUE" ? "xml" : "html"
               }
               style={atomOneDark}
               customStyle={{ borderRadius: "8px", fontSize: "11px", margin: 0, maxHeight: "400px" }}
