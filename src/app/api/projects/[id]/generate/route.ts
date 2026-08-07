@@ -88,7 +88,7 @@ Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
 
         // Throttle between generate calls
         if (componentsWithSpecs.indexOf(component) < componentsWithSpecs.length - 1) {
-          await sleep(1500);
+          await sleep(2500);
         }
 
         // Reload to guard against race conditions

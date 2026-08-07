@@ -14,15 +14,15 @@ type ChatCompletionParams = {
 
 /**
  * Call LLM with exponential backoff retry on 429 (rate limit) errors.
- * - Max 5 retries
- * - Base delay: 2s, multiplied by 2 each attempt + jitter
+ * - Max 8 retries
+ * - Base delay: 3s, multiplied by 2 each attempt + jitter
  * - Only retries on 429; other errors propagate immediately
  */
 export async function llmWithRetry(
   zai: ZaiInstance,
   params: ChatCompletionParams,
-  maxRetries = 5,
-  baseDelayMs = 2000
+  maxRetries = 8,
+  baseDelayMs = 3000
 ): Promise<{ choices: Array<{ message?: { content?: string } }> }> {
   let lastError: Error | null = null;
 

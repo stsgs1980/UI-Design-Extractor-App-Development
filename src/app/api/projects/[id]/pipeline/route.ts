@@ -7,6 +7,23 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+export type PipelineLog = {
+  ts: string;
+  level: 'info' | 'warn' | 'error' | 'success';
+  step: string;
+  message: string;
+  component?: string;
+};
+
+function log(logs: PipelineLog[], level: PipelineLog['level'], step: string, message: string, component?: string) {
+  const entry: PipelineLog = { ts: new Date().toISOString(), level, step, message, component };
+  logs.push(entry);
+  const prefix = `[Pipeline][${step}]`;
+  if (level === 'error') console.error(prefix, message);
+  else if (level === 'warn') console.warn(prefix, message);
+  else console.log(prefix, message);
+}
+
 function stripMarkdownFences(text: string): string {
   return text
     .replace(/```json\n?/g, '')
@@ -93,13 +110,14 @@ The JSON must have this exact structure:
 const GENERATE_SYSTEM_PROMPT = `You are a clean code generation expert. Generate standalone, reusable UI component code from specifications.
 You must respond with ONLY the generated code, no markdown code blocks, no explanation, no commentary.`;
 
-async function runAnalyze(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>, componentQuery: string | null) {
+async function runAnalyze(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>, componentQuery: string | null, logs: PipelineLog[]) {
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project || !project.rawHtml) {
     throw new Error('No HTML data to analyze');
   }
 
   await db.project.update({ where: { id: projectId }, data: { status: 'analyzing' } });
+  log(logs, 'info', 'analyze', 'Starting analysis...');
 
   const focusInstruction = componentQuery
     ? `\n\nIMPORTANT: Focus ONLY on these component types: ${componentQuery}. Ignore other elements.`
@@ -116,13 +134,23 @@ ${focusInstruction}
 HTML to analyze:
 ${project.rawHtml.substring(0, 30000)}`;
 
+  let retryCount = 0;
   const completion = await llmWithRetry(zai, {
     messages: [
       { role: 'assistant', content: ANALYZE_SYSTEM_PROMPT },
       { role: 'user', content: USER_PROMPT },
     ],
     thinking: { type: 'disabled' },
+  }).catch((err) => {
+    // Extract retry info from error message if available
+    const match = err?.message?.match(/retry (\d+)\//);
+    if (match) retryCount = parseInt(match[1]);
+    throw err;
   });
+
+  if (retryCount > 0) {
+    log(logs, 'warn', 'analyze', `LLM rate limited, retried ${retryCount} time(s)`);
+  }
 
   const response = completion.choices[0]?.message?.content;
   if (!response) throw new Error('Empty LLM response during analysis');
@@ -157,8 +185,12 @@ ${project.rawHtml.substring(0, 30000)}`;
     )
   );
 
+  const validTokens = (parsed.designTokens || []).filter(
+    (t: { name?: string; value?: string | null; category?: string | null }) => t.name && t.value && t.category
+  );
+
   await Promise.all(
-    (parsed.designTokens || []).map((token: { category: string; name: string; value: string; originalVar?: string | null }) =>
+    validTokens.map((token: { category: string; name: string; value: string; originalVar?: string | null }) =>
       db.designToken.create({
         data: {
           projectId,
@@ -170,18 +202,24 @@ ${project.rawHtml.substring(0, 30000)}`;
       })
     )
   );
+
+  log(logs, 'success', 'analyze', `Found ${validComponents.length} components and ${validTokens.length} design tokens`);
 }
 
-async function runSpec(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>) {
+async function runSpec(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>, logs: PipelineLog[]) {
   const components = await db.extractedComponent.findMany({ where: { projectId } });
   if (components.length === 0) throw new Error('No components to generate specs for');
 
   await db.project.update({ where: { id: projectId }, data: { status: 'speccing' } });
+  log(logs, 'info', 'spec', `Generating specs for ${components.length} components...`);
 
   let specErrors = 0;
 
-  for (const component of components) {
+  for (let i = 0; i < components.length; i++) {
+    const component = components[i];
     try {
+      log(logs, 'info', 'spec', `Specifying: ${component.name} (${i + 1}/${components.length})`, component.name);
+
       const USER_PROMPT = `Generate a detailed specification for this UI component.
 
 Component name: ${component.name}
@@ -202,16 +240,19 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
       });
 
       const response = completion.choices[0]?.message?.content;
-      if (!response) { specErrors++; continue; }
+      if (!response) {
+        log(logs, 'error', 'spec', `Empty response for ${component.name}`, component.name);
+        specErrors++;
+        continue;
+      }
 
       // Throttle between spec calls
-      if (components.indexOf(component) < components.length - 1) {
-        await sleep(1500);
+      if (i < components.length - 1) {
+        await sleep(2500);
       }
 
       const cleanedResponse = stripMarkdownFences(response);
 
-      // Verify component still exists before updating
       const exists = await db.extractedComponent.findUnique({ where: { id: component.id } });
       if (!exists) { specErrors++; continue; }
 
@@ -222,6 +263,7 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
           where: { id: component.id },
           data: { spec: JSON.stringify({ name: component.name, description: cleanedResponse, props: [], variants: [], accessibility: [], dependencies: [] }) },
         });
+        log(logs, 'warn', 'spec', `Invalid JSON for ${component.name}, saved as text`, component.name);
         continue;
       }
 
@@ -229,10 +271,20 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
         where: { id: component.id },
         data: { spec: cleanedResponse },
       });
+      log(logs, 'success', 'spec', `Spec done: ${component.name}`, component.name);
     } catch (err) {
-      console.error(`Spec failed for component ${component.id} (${component.name}):`, err);
+      const msg = err instanceof Error ? err.message : String(err);
+      const shortMsg = msg.length > 120 ? msg.substring(0, 120) + '...' : msg;
+      log(logs, 'error', 'spec', `Failed: ${component.name} - ${shortMsg}`, component.name);
       specErrors++;
     }
+  }
+
+  const specSuccess = components.length - specErrors;
+  if (specErrors > 0) {
+    log(logs, 'warn', 'spec', `${specSuccess}/${components.length} specs succeeded, ${specErrors} failed`);
+  } else {
+    log(logs, 'success', 'spec', `All ${components.length} specs generated successfully`);
   }
 
   if (specErrors === components.length) {
@@ -240,7 +292,7 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
   }
 }
 
-async function runGenerate(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>, codeFormat: string) {
+async function runGenerate(projectId: string, zai: Awaited<ReturnType<typeof ZAI.create>>, codeFormat: string, logs: PipelineLog[]) {
   const project = await db.project.findUnique({
     where: { id: projectId },
     include: { components: true, tokens: true },
@@ -251,6 +303,7 @@ async function runGenerate(projectId: string, zai: Awaited<ReturnType<typeof ZAI
   if (componentsWithSpecs.length === 0) throw new Error('No components with specs to generate code from');
 
   await db.project.update({ where: { id: projectId }, data: { status: 'generating' } });
+  log(logs, 'info', 'generate', `Generating ${codeFormat.toUpperCase()} code for ${componentsWithSpecs.length} components...`);
 
   const tokensContext = project.tokens.length > 0
     ? `\n\nDesign tokens available:\n${project.tokens.map((t) => `${t.name}: ${t.value} (${t.category})`).join('\n')}`
@@ -264,8 +317,11 @@ async function runGenerate(projectId: string, zai: Awaited<ReturnType<typeof ZAI
 
   let genErrors = 0;
 
-  for (const component of componentsWithSpecs) {
+  for (let i = 0; i < componentsWithSpecs.length; i++) {
+    const component = componentsWithSpecs[i];
     try {
+      log(logs, 'info', 'generate', `Generating: ${component.name} (${i + 1}/${componentsWithSpecs.length})`, component.name);
+
       const USER_PROMPT = `Generate a ${codeFormat.toUpperCase()} component based on this specification:
 
 Component Specification:
@@ -288,14 +344,17 @@ Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
       });
 
       const response = completion.choices[0]?.message?.content;
-      if (!response) { genErrors++; continue; }
-
-      // Throttle between generate calls
-      if (componentsWithSpecs.indexOf(component) < componentsWithSpecs.length - 1) {
-        await sleep(1500);
+      if (!response) {
+        log(logs, 'error', 'generate', `Empty response for ${component.name}`, component.name);
+        genErrors++;
+        continue;
       }
 
-      // Reload component to ensure it still exists (guards against race conditions)
+      // Throttle between generate calls
+      if (i < componentsWithSpecs.length - 1) {
+        await sleep(2500);
+      }
+
       const exists = await db.extractedComponent.findUnique({ where: { id: component.id } });
       if (!exists) { genErrors++; continue; }
 
@@ -306,10 +365,20 @@ Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
           codeFormat,
         },
       });
+      log(logs, 'success', 'generate', `Code generated: ${component.name}`, component.name);
     } catch (err) {
-      console.error(`Generate failed for component ${component.id} (${component.name}):`, err);
+      const msg = err instanceof Error ? err.message : String(err);
+      const shortMsg = msg.length > 120 ? msg.substring(0, 120) + '...' : msg;
+      log(logs, 'error', 'generate', `Failed: ${component.name} - ${shortMsg}`, component.name);
       genErrors++;
     }
+  }
+
+  const genSuccess = componentsWithSpecs.length - genErrors;
+  if (genErrors > 0) {
+    log(logs, 'warn', 'generate', `${genSuccess}/${componentsWithSpecs.length} generations succeeded, ${genErrors} failed`);
+  } else {
+    log(logs, 'success', 'generate', `All ${componentsWithSpecs.length} components generated successfully`);
   }
 
   if (genErrors === componentsWithSpecs.length) {
@@ -321,6 +390,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   let pipelineFailed = false;
   let errorMessage = 'Pipeline failed';
+  const logs: PipelineLog[] = [];
 
   try {
     const body = await request.json();
@@ -335,16 +405,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'No HTML data. Extract the page first.' }, { status: 400 });
     }
 
+    log(logs, 'info', 'pipeline', `Starting pipeline (format: ${codeFormat})`);
     const zai = await ZAI.create();
 
     try {
-      await runAnalyze(id, zai, project.componentQuery);
-      await runSpec(id, zai);
-      await runGenerate(id, zai, codeFormat);
+      await runAnalyze(id, zai, project.componentQuery, logs);
+      await runSpec(id, zai, logs);
+      await runGenerate(id, zai, codeFormat, logs);
     } catch (pipelineError) {
       pipelineFailed = true;
       errorMessage = pipelineError instanceof Error ? pipelineError.message : 'Pipeline failed';
-      console.error(`Pipeline failed for project ${id}:`, pipelineError);
+      log(logs, 'error', 'pipeline', `Pipeline error: ${errorMessage}`);
     }
 
     // Always determine the correct final status based on actual data
@@ -364,7 +435,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const hasSpecs = finalProject.components.some((c) => c.spec);
     const hasCode = finalProject.components.some((c) => c.generatedCode);
 
-    // Determine the most accurate status
     let finalStatus: string;
     let finalError: string | null = null;
 
@@ -383,11 +453,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       where: { id },
       data: {
         status: finalStatus,
- ...(finalError ? { error: finalError } : {}),
+        ...(finalError ? { error: finalError } : {}),
       },
     });
 
-    // Re-fetch with updated status
     const result = await db.project.findUnique({
       where: { id },
       include: {
@@ -397,19 +466,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
 
     if (pipelineFailed) {
-      return NextResponse.json({ ...result, _partial: true, _error: errorMessage }, { status: 207 });
+      log(logs, 'warn', 'pipeline', `Pipeline partially completed (status: ${finalStatus})`);
+      return NextResponse.json({ ...result, _partial: true, _error: errorMessage, _logs: logs }, { status: 207 });
     }
 
-    return NextResponse.json(result);
+    log(logs, 'success', 'pipeline', `Pipeline completed successfully (status: ${finalStatus})`);
+    return NextResponse.json({ ...result, _logs: logs });
   } catch (error) {
-    console.error('Pipeline fatal error:', error);
-    // Last resort: try to set a sane status
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    log(logs, 'error', 'pipeline', `Fatal: ${msg}`);
     try {
       await db.project.update({
         where: { id },
-        data: { status: 'failed', error: error instanceof Error ? error.message : 'Unknown error' },
+        data: { status: 'failed', error: msg },
       });
     } catch {}
-    return NextResponse.json({ error: 'Pipeline failed' }, { status: 500 });
+    return NextResponse.json({ error: msg, _logs: logs }, { status: 500 });
   }
 }

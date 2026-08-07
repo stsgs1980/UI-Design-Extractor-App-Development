@@ -40,6 +40,7 @@ import {
   Loader2,
   Copy,
   Check,
+  X,
   Download,
   Star,
   ExternalLink,
@@ -57,6 +58,7 @@ import {
   Layers,
   CircleDot,
   Bookmark,
+  Terminal,
 } from 'lucide-react';
 import { PipelineIndicator, PipelineStepsDetail } from './pipeline-indicator';
 import { toast } from 'sonner';
@@ -86,6 +88,7 @@ export function ProjectView() {
   const [codeFormat, setCodeFormat] = useState<CodeFormat>('html');
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [compDetailTab, setCompDetailTab] = useState('preview');
+  const [pipelineLogs, setPipelineLogs] = useState<Array<{ts: string; level: string; step: string; message: string; component?: string}> | null>(null);
 
   // Reset component detail tab when switching components
   useEffect(() => {
@@ -217,15 +220,29 @@ export function ProjectView() {
   async function runFullPipeline() {
     if (!selectedProjectId) return;
     setIsPipelineRunning(true);
+    setPipelineLogs(null);
     try {
       const res = await fetch(`/api/projects/${selectedProjectId}/pipeline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codeFormat }),
       });
-      if (!res.ok) throw new Error((await res.json()).error || 'Pipeline failed');
-      await fetchProject();
-      toast.success('Full pipeline completed');
+      const data = await res.json();
+      
+      // Store logs from response
+      if (data._logs) setPipelineLogs(data._logs);
+
+      if (res.status === 207) {
+        // Partial success
+        await fetchProject();
+        const errCount = data._logs?.filter((l: {level: string}) => l.level === 'error').length || 0;
+        toast.warning(`Pipeline partially completed (${errCount} error${errCount !== 1 ? 's' : ''})`);
+      } else if (!res.ok) {
+        throw new Error(data.error || 'Pipeline failed');
+      } else {
+        await fetchProject();
+        toast.success('Full pipeline completed');
+      }
     } catch (err) {
       await fetchProject();
       toast.error(err instanceof Error ? err.message : 'Pipeline failed');
@@ -452,6 +469,43 @@ export function ProjectView() {
               <CardContent className="p-4">
                 <p className="text-sm font-medium text-destructive">Error</p>
                 <p className="mt-1 text-xs text-destructive/80">{project.error}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Pipeline Logs */}
+          {pipelineLogs && pipelineLogs.length > 0 && (
+            <Card className="bg-card/50 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm"><Terminal className="mr-1.5 inline h-3.5 w-3.5" />Pipeline Log</CardTitle>
+                  <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => setPipelineLogs(null)}>
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="max-h-72">
+                  <div className="space-y-0.5">
+                    {pipelineLogs.map((entry, i) => {
+                      const time = new Date(entry.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                      const colorClass = entry.level === 'error'
+                        ? 'text-destructive'
+                        : entry.level === 'warn'
+                          ? 'text-yellow-600 dark:text-yellow-400'
+                          : entry.level === 'success'
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-muted-foreground';
+                      return (
+                        <div key={i} className="flex items-start gap-2 py-0.5 font-mono text-[11px]">
+                          <span className="shrink-0 text-muted-foreground/60">{time}</span>
+                          <span className={`shrink-0 w-12 uppercase font-semibold ${colorClass}`}>{entry.step}</span>
+                          <span className={colorClass}>{entry.message}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           )}

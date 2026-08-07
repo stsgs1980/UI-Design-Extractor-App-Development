@@ -77,7 +77,7 @@ Provide a comprehensive spec including props, variants, accessibility notes, and
 
         // Throttle between component spec calls
         if (project.components.indexOf(component) < project.components.length - 1) {
-          await sleep(1500);
+          await sleep(2500);
         }
 
         const response = completion.choices[0]?.message?.content;
