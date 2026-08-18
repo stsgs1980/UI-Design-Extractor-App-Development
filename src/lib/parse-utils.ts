@@ -76,11 +76,11 @@ export function repairJson(text: string): string {
       if (depth === 0 && rootStart >= 0) {
         // Found the closing } of the root object
         let candidate = fixed.substring(rootStart, i + 1);
-        const [ob, oc, unclosed] = bracketBalance(candidate);
-        if (unclosed) continue; // skip if strings still unbalanced
+        const balance = bracketBalance(candidate);
+        if (balance[2]) continue; // unclosed string
         // Fix missing brackets
-        while (oc > 0) { candidate += '}'; oc--; }
-        while (ob > 0) { candidate += ']'; ob--; }
+        while (balance[1] > 0) { candidate += '}'; balance[1]--; }
+        while (balance[0] > 0) { candidate += ']'; balance[0]--; }
         try {
           JSON.parse(candidate);
           return candidate;
@@ -98,10 +98,10 @@ export function repairJson(text: string): string {
     if (pos < 0) break;
     attempts++;
     let candidate = fixed.substring(0, pos + 1);
-    const [ob, oc, unclosed] = bracketBalance(candidate);
-    if (unclosed) continue;
-    while (oc > 0) { candidate += '}'; oc--; }
-    while (ob > 0) { candidate += ']'; ob--; }
+    const balance = bracketBalance(candidate);
+    if (balance[2]) continue;
+    while (balance[1] > 0) { candidate += '}'; balance[1]--; }
+    while (balance[0] > 0) { candidate += ']'; balance[0]--; }
     try {
       JSON.parse(candidate);
       lastAttempt = candidate;
