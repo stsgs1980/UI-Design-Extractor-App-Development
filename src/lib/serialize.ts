@@ -1,4 +1,4 @@
-import type { Project, ExtractedComponent, DesignToken, Reference } from '@prisma/client';
+import type { Project, ExtractedComponent, DesignToken } from '@prisma/client';
 import { STATUS_LABELS, TOKEN_CATEGORY_LABELS } from '@/types/extractor';
 
 /** Prisma enum values are UPPERCASE; frontend expects lowercase. */

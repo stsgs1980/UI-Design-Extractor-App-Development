@@ -32,13 +32,9 @@ import {
   Trash2,
   Copy,
   Check,
-  Download,
   ExternalLink,
-  Code2,
-  Bookmark,
   RotateCcw,
   Loader2,
-  X,
   Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';

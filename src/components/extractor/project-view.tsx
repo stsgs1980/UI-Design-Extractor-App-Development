@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useExtractorStore } from '@/store/extractor-store';
-import { STATUS_COLORS, TOKEN_CATEGORY_ICONS } from '@/types/extractor';
-import type { ExtractedComponent, DesignToken, CodeFormat, PipelineStep, SpecData, TokenCategory } from '@/types/extractor';
+import { STATUS_COLORS } from '@/types/extractor';
+import type { ExtractedComponent, DesignToken, CodeFormat, PipelineStep, SpecData } from '@/types/extractor';
 import { PIPELINE_STEPS } from '@/types/extractor';
 import {
   Card,
@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import {
   Select,
   SelectContent,
@@ -35,13 +34,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Loader2,
   Copy,
   Check,
   Download,
-  Star,
   ExternalLink,
   Code2,
   Palette,
@@ -75,7 +72,7 @@ const TOKEN_ICON_MAP: Record<string, React.ElementType> = {
 };
 
 export function ProjectView() {
-  const { selectedProjectId, currentProject, setCurrentProject, setView, addReference, sidebarOpen } = useExtractorStore();
+  const { selectedProjectId, currentProject, setCurrentProject, setView, addReference } = useExtractorStore();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedComponent, setSelectedComponent] = useState<ExtractedComponent | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -85,7 +82,7 @@ export function ProjectView() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [refName, setRefName] = useState('');
   const [refTags, setRefTags] = useState('');
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [_previewHtml, _setPreviewHtml] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const fetchProject = useCallback(async () => {

@@ -138,7 +138,7 @@ export function ExtractView() {
         throw new Error(err.error || 'Analysis failed');
       }
 
-      const analyzeData = await analyzeRes.json();
+      await analyzeRes.json();
       updateStep('analyze', 'completed');
 
       // Step 3: Spec

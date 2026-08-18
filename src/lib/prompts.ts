@@ -7,7 +7,7 @@ export const ANALYZE_SYSTEM_PROMPT = `You are a UI analysis expert. Extract comp
 You must respond with ONLY valid JSON, no markdown code blocks, no explanation.
 Extract at most 8 most important/visible components. For each component, include only the essential outer HTML (keep under 500 characters).
 
-CRITICAL: In the "html" field, replace all double quotes (\" ) with single quotes ('). This prevents JSON parsing errors.
+CRITICAL: In the "html" field, replace all double quotes with single quotes. This prevents JSON parsing errors.
 
 The JSON must have this exact structure:
 {

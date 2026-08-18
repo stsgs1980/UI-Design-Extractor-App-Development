@@ -60,8 +60,8 @@ const eslintConfig = [
   {
     rules: {
       // TypeScript rules
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/ban-ts-comment": "off",
       "@typescript-eslint/prefer-as-const": "off",
@@ -80,19 +80,19 @@ const eslintConfig = [
       "@next/next/no-html-link-for-pages": "off",
 
       // General JavaScript rules
-      "prefer-const": "off",
-      "no-unused-vars": "off",
-      "no-console": "off",
-      "no-debugger": "off",
-      "no-empty": "off",
-      "no-irregular-whitespace": "off",
+      "prefer-const": "warn",
+      "no-unused-vars": "off", // handled by @typescript-eslint/no-unused-vars
+      "no-console": "warn",
+      "no-debugger": "error",
+      "no-empty": "warn",
+      "no-irregular-whitespace": "warn",
       "no-case-declarations": "off",
-      "no-fallthrough": "off",
-      "no-mixed-spaces-and-tabs": "off",
+      "no-fallthrough": "warn",
+      "no-mixed-spaces-and-tabs": "warn",
       "no-redeclare": "off",
       "no-undef": "off",
-      "no-unreachable": "off",
-      "no-useless-escape": "off",
+      "no-unreachable": "error",
+      "no-useless-escape": "warn",
     },
   },
 
@@ -106,6 +106,7 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "tailwind.config.ts",
       "examples/**",
       "skills/**",
       "eslint-rules/**",

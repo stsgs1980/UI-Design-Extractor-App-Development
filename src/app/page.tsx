@@ -12,7 +12,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import type { Project } from '@/types/extractor';
 
 export default function Home() {
-  const { currentView, selectedProjectId, sidebarOpen, setCurrentProject, selectProject, setView } =
+  const { currentView, selectedProjectId, sidebarOpen, setCurrentProject } =
     useExtractorStore();
 
   // When selecting a project, fetch its details

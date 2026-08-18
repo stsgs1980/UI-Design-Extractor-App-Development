@@ -10,7 +10,7 @@ import {
   buildSpecUserPrompt,
   buildGenerateUserPrompt,
 } from '@/lib/prompts';
-import { TO_CODE_FORMAT, TO_PROJECT_STATUS } from '@/types/extractor';
+import { TO_CODE_FORMAT } from '@/types/extractor';
 
 /** Shared ZAI client type produced by `await ZAI.create()` */
 export type ZaiClient = Awaited<ReturnType<typeof ZAI.create>>;

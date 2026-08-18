@@ -3,13 +3,8 @@ import type {
   AppView,
   Project,
   Reference,
-  ExtractedComponent,
-  DesignToken,
-  ProjectStatus,
   PipelineStep,
-  PIPELINE_STEPS,
 } from '@/types/extractor';
-import { toast } from 'sonner';
 
 interface ExtractorState {
   // Navigation
