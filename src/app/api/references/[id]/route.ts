@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
+import { stripMarkdownFences } from '@/lib/parse-utils';
+import { GENERATE_SYSTEM_PROMPT } from '@/lib/prompts';
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-const SYSTEM_PROMPT = `You are a clean code generation expert. Generate standalone, reusable UI component code from specifications.
-You must respond with ONLY the generated code, no markdown code blocks, no explanation, no commentary.`;
-
-function stripMarkdownFences(text: string): string {
-  return text
-    .replace(/```(?:html|react|vue|jsx|tsx)?\n?/g, '')
-    .replace(/```\n?/g, '')
-    .trim();
-}
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
@@ -57,7 +49,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       vue: 'Generate a clean Vue 3 SFC (Single File Component) using <template>, <script setup lang="ts">, and <style scoped> tags.',
     };
 
-    const USER_PROMPT = `Regenerate a ${codeFormat.toUpperCase()} component based on this saved specification:
+    const userPrompt = `Regenerate a ${codeFormat.toUpperCase()} component based on this saved specification:
 
 Component name: ${reference.name}
 ${reference.description ? `Description: ${reference.description}` : ''}
@@ -73,8 +65,8 @@ Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
 
     const completion = await zai.chat.completions.create({
       messages: [
-        { role: 'assistant', content: SYSTEM_PROMPT },
-        { role: 'user', content: USER_PROMPT },
+        { role: 'assistant', content: GENERATE_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
       ],
       thinking: { type: 'disabled' },
     });
@@ -86,12 +78,9 @@ Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
 
     const generatedCode = stripMarkdownFences(response);
 
-    // Update the reference with regenerated HTML/CSS
     const updated = await db.reference.update({
       where: { id },
-      data: {
-        html: generatedCode,
-      },
+      data: { html: generatedCode },
     });
 
     return NextResponse.json({ reference: updated, generatedCode });
@@ -99,7 +88,7 @@ Generate ONLY the code, nothing else. No explanations, no markdown fences.`;
     console.error('Failed to regenerate reference:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to regenerate reference' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
