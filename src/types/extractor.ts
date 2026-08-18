@@ -1,28 +1,56 @@
-export type ProjectStatus =
-  | 'pending'
-  | 'extracting'
-  | 'extracted'
-  | 'analyzing'
-  | 'analyzed'
-  | 'speccing'
-  | 'specced'
-  | 'generating'
-  | 'completed'
-  | 'failed';
+import type { ProjectStatus, ViewportType, CodeFormat, TokenCategory } from '@prisma/client';
 
-export type ViewportType = 'desktop' | 'mobile' | 'tablet';
-export type CodeFormat = 'html' | 'react' | 'vue';
-export type TokenCategory = 'color' | 'spacing' | 'typography' | 'border-radius' | 'shadow' | 'opacity';
+export type { ProjectStatus, ViewportType, CodeFormat, TokenCategory };
 
 export type AppView = 'dashboard' | 'extract' | 'project' | 'references';
+
+/** Map Prisma UPPERCASE enum to lowercase UI values */
+export const STATUS_LABELS: Record<ProjectStatus, string> = {
+  PENDING: 'pending',
+  EXTRACTING: 'extracting',
+  EXTRACTED: 'extracted',
+  ANALYZING: 'analyzing',
+  ANALYZED: 'analyzed',
+  SPECCING: 'speccing',
+  SPECCED: 'specced',
+  GENERATING: 'generating',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+};
+
+/** Map UI lowercase values back to Prisma enums */
+export const TO_PROJECT_STATUS = Object.fromEntries(
+  Object.entries(STATUS_LABELS).map(([k, v]) => [v, k]),
+) as Record<string, ProjectStatus>;
+
+export const TO_VIEWPORT_TYPE: Record<string, ViewportType> = {
+  desktop: 'DESKTOP',
+  mobile: 'MOBILE',
+  tablet: 'TABLET',
+};
+
+export const TO_CODE_FORMAT: Record<string, CodeFormat> = {
+  html: 'HTML',
+  react: 'REACT',
+  vue: 'VUE',
+};
+
+export const TOKEN_CATEGORY_LABELS: Record<TokenCategory, string> = {
+  COLOR: 'color',
+  SPACING: 'spacing',
+  TYPOGRAPHY: 'typography',
+  BORDER_RADIUS: 'border-radius',
+  SHADOW: 'shadow',
+  OPACITY: 'opacity',
+};
 
 export interface Project {
   id: string;
   name: string;
   url: string;
-  status: ProjectStatus;
+  status: string;
   componentQuery: string | null;
-  viewport: ViewportType;
+  viewport: string;
   screenshotUrl: string | null;
   rawHtml: string | null;
   pageTitle: string | null;
@@ -43,7 +71,7 @@ export interface ExtractedComponent {
   inlineStyles: string | null;
   spec: string | null;
   generatedCode: string | null;
-  codeFormat: CodeFormat;
+  codeFormat: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -51,7 +79,7 @@ export interface ExtractedComponent {
 export interface DesignToken {
   id: string;
   projectId: string;
-  category: TokenCategory;
+  category: string;
   name: string;
   value: string;
   originalVar: string | null;
@@ -81,38 +109,6 @@ export interface PipelineStep {
   status: 'pending' | 'running' | 'completed' | 'failed';
 }
 
-export interface CreateProjectRequest {
-  url: string;
-  name?: string;
-  componentQuery?: string;
-  viewport?: ViewportType;
-}
-
-export interface PipelineRequest {
-  componentQuery?: string;
-  codeFormat?: CodeFormat;
-}
-
-export interface SaveReferenceRequest {
-  name: string;
-  description?: string;
-  sourceUrl?: string;
-  componentId?: string;
-  html: string;
-  css?: string;
-  spec?: string;
-  tags?: string[];
-}
-
-export interface SpecData {
-  name: string;
-  description: string;
-  props: Array<{ name: string; type: string; default: string; description: string }>;
-  variants: string[];
-  accessibility: string[];
-  dependencies: string[];
-}
-
 export const PIPELINE_STEPS: PipelineStep[] = [
   { id: 'extract', label: 'Extract', description: 'Fetch and parse page HTML', status: 'pending' },
   { id: 'analyze', label: 'Analyze', description: 'Identify components and design tokens', status: 'pending' },
@@ -120,7 +116,8 @@ export const PIPELINE_STEPS: PipelineStep[] = [
   { id: 'generate', label: 'Generate', description: 'Produce reusable HTML component', status: 'pending' },
 ];
 
-export const STATUS_COLORS: Record<ProjectStatus, string> = {
+/** Status colors keyed by lowercase UI status */
+export const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-muted text-muted-foreground',
   extracting: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
   extracted: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
@@ -133,7 +130,7 @@ export const STATUS_COLORS: Record<ProjectStatus, string> = {
   failed: 'bg-destructive/10 text-destructive',
 };
 
-export const TOKEN_CATEGORY_ICONS: Record<TokenCategory, string> = {
+export const TOKEN_CATEGORY_ICONS: Record<string, string> = {
   color: 'Palette',
   spacing: 'MoveHorizontal',
   typography: 'Type',
@@ -141,3 +138,12 @@ export const TOKEN_CATEGORY_ICONS: Record<TokenCategory, string> = {
   shadow: 'Layers',
   opacity: 'CircleDot',
 };
+
+export interface SpecData {
+  name: string;
+  description: string;
+  props: Array<{ name: string; type: string; default: string; description: string }>;
+  variants: string[];
+  accessibility: string[];
+  dependencies: string[];
+}

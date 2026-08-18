@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { serializeProject, serializeComponent, serializeToken } from '@/lib/serialize';
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
+type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
@@ -11,12 +10,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const project = await db.project.findUnique({
       where: { id },
       include: {
-        components: {
-          orderBy: { createdAt: 'asc' },
-        },
-        tokens: {
-          orderBy: { category: 'asc' },
-        },
+        components: { orderBy: { createdAt: 'asc' } },
+        tokens: { orderBy: { category: 'asc' } },
       },
     });
 
@@ -24,7 +19,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    return NextResponse.json(project);
+    return NextResponse.json({
+      ...serializeProject(project),
+      components: project.components.map(serializeComponent),
+      tokens: project.tokens.map(serializeToken),
+    });
   } catch (error) {
     console.error('Failed to get project:', error);
     return NextResponse.json({ error: 'Failed to get project' }, { status: 500 });
@@ -34,15 +33,12 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const project = await db.project.findUnique({
-      where: { id },
-    });
+    const project = await db.project.findUnique({ where: { id } });
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Delete references linked to components of this project first
     const components = await db.extractedComponent.findMany({
       where: { projectId: id },
       select: { id: true },
@@ -54,10 +50,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       });
     }
 
-    // Cascade will handle components, tokens, etc.
-    await db.project.delete({
-      where: { id },
-    });
+    await db.project.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
   } catch (error) {

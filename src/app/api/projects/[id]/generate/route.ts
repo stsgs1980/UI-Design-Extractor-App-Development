@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
+import { pipelineRequestSchema } from '@/lib/validators';
 import { runGenerate } from '@/lib/pipeline-steps';
+import { serializeComponent } from '@/lib/serialize';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -9,7 +11,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const codeFormat = body.codeFormat || 'html';
+    const parsed = pipelineRequestSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
+    }
+
+    const { codeFormat } = parsed.data;
 
     const project = await db.project.findUnique({ where: { id }, include: { components: true } });
     if (!project) {
@@ -25,12 +36,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       const zai = await ZAI.create();
       const components = await runGenerate(id, zai, codeFormat);
 
-      await db.project.update({ where: { id }, data: { status: 'completed' } });
+      await db.project.update({ where: { id }, data: { status: 'COMPLETED' } });
 
-      return NextResponse.json({ components });
+      return NextResponse.json({ components: components.map(serializeComponent) });
     } catch (generateError) {
       const msg = generateError instanceof Error ? generateError.message : 'Code generation failed';
-      await db.project.update({ where: { id }, data: { status: 'failed', error: msg } });
+      await db.project.update({ where: { id }, data: { status: 'FAILED', error: msg } });
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (error) {

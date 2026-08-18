@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
+import type { ProjectStatus, CodeFormat, TokenCategory } from '@prisma/client';
 import { stripMarkdownFences, repairJson } from '@/lib/parse-utils';
 import {
   ANALYZE_SYSTEM_PROMPT,
@@ -9,6 +10,7 @@ import {
   buildSpecUserPrompt,
   buildGenerateUserPrompt,
 } from '@/lib/prompts';
+import { TO_CODE_FORMAT, TO_PROJECT_STATUS } from '@/types/extractor';
 
 /** Shared ZAI client type produced by `await ZAI.create()` */
 export type ZaiClient = Awaited<ReturnType<typeof ZAI.create>>;
@@ -32,6 +34,16 @@ interface LlmToken {
   originalVar?: string | null;
 }
 
+/** Map lowercase LLM token category to Prisma enum */
+const CATEGORY_MAP: Record<string, TokenCategory> = {
+  color: 'COLOR',
+  spacing: 'SPACING',
+  typography: 'TYPOGRAPHY',
+  'border-radius': 'BORDER_RADIUS',
+  shadow: 'SHADOW',
+  opacity: 'OPACITY',
+};
+
 // ---------------------------------------------------------------------------
 // Step 1: Analyze
 // ---------------------------------------------------------------------------
@@ -42,7 +54,7 @@ export async function runAnalyze(projectId: string, zai: ZaiClient, componentQue
     throw new Error('No HTML data to analyze');
   }
 
-  await db.project.update({ where: { id: projectId }, data: { status: 'analyzing' } });
+  await db.project.update({ where: { id: projectId }, data: { status: 'ANALYZING' as ProjectStatus } });
 
   const userPrompt = buildAnalyzeUserPrompt(project.rawHtml, project.componentQuery || componentQuery);
 
@@ -69,7 +81,7 @@ export async function runAnalyze(projectId: string, zai: ZaiClient, componentQue
   }
 
   const validTokens = (parsed.designTokens || []).filter(
-    (t: LlmToken) => t.name && t.value && t.category,
+    (t: LlmToken) => t.name && t.value && t.category && CATEGORY_MAP[t.category],
   );
 
   // Atomic: delete old + create new in a single transaction
@@ -97,7 +109,7 @@ export async function runAnalyze(projectId: string, zai: ZaiClient, componentQue
         tx.designToken.create({
           data: {
             projectId,
-            category: t.category!,
+            category: CATEGORY_MAP[t.category!],
             name: t.name!,
             value: t.value!,
             originalVar: t.originalVar || null,
@@ -125,7 +137,7 @@ export async function runSpec(projectId: string, zai: ZaiClient) {
   if (!project) throw new Error('Project not found');
   if (project.components.length === 0) throw new Error('No components to generate specs for');
 
-  await db.project.update({ where: { id: projectId }, data: { status: 'speccing' } });
+  await db.project.update({ where: { id: projectId }, data: { status: 'SPECCING' as ProjectStatus } });
 
   const updatedComponents = [];
 
@@ -145,7 +157,6 @@ export async function runSpec(projectId: string, zai: ZaiClient) {
 
     const cleaned = stripMarkdownFences(response);
 
-    // Validate JSON, fallback to wrapper if invalid
     let specData: string;
     try {
       JSON.parse(cleaned);
@@ -186,7 +197,9 @@ export async function runGenerate(projectId: string, zai: ZaiClient, codeFormat:
   const componentsWithSpecs = project.components.filter((c) => c.spec);
   if (componentsWithSpecs.length === 0) throw new Error('No components with specs to generate code from');
 
-  await db.project.update({ where: { id: projectId }, data: { status: 'generating' } });
+  await db.project.update({ where: { id: projectId }, data: { status: 'GENERATING' as ProjectStatus } });
+
+  const prismaCodeFormat = (TO_CODE_FORMAT[codeFormat] || 'HTML') as CodeFormat;
 
   const tokensContext = project.tokens.length > 0
     ? `\n\nDesign tokens available:\n${project.tokens.map((t) => `${t.name}: ${t.value} (${t.category})`).join('\n')}`
@@ -217,7 +230,7 @@ export async function runGenerate(projectId: string, zai: ZaiClient, codeFormat:
       where: { id: component.id },
       data: {
         generatedCode: stripMarkdownFences(response),
-        codeFormat,
+        codeFormat: prismaCodeFormat,
       },
     });
     updatedComponents.push(updated);

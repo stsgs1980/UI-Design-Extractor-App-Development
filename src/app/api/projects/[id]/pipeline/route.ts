@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
+import { pipelineRequestSchema } from '@/lib/validators';
 import { runAnalyze, runSpec, runGenerate } from '@/lib/pipeline-steps';
+import { serializeProject, serializeComponent, serializeToken } from '@/lib/serialize';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -9,7 +11,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
     const body = await request.json();
-    const codeFormat = body.codeFormat || 'html';
+    const parsed = pipelineRequestSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
+    }
+
+    const { codeFormat } = parsed.data;
 
     const project = await db.project.findUnique({ where: { id } });
     if (!project) {
@@ -28,17 +39,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
       const finalProject = await db.project.update({
         where: { id },
-        data: { status: 'completed' },
+        data: { status: 'COMPLETED' },
         include: {
           components: { orderBy: { createdAt: 'asc' } },
           tokens: { orderBy: { category: 'asc' } },
         },
       });
 
-      return NextResponse.json(finalProject);
+      return NextResponse.json({
+        ...serializeProject(finalProject),
+        components: finalProject.components.map(serializeComponent),
+        tokens: finalProject.tokens.map(serializeToken),
+      });
     } catch (pipelineError) {
       const msg = pipelineError instanceof Error ? pipelineError.message : 'Pipeline failed';
-      await db.project.update({ where: { id }, data: { status: 'failed', error: msg } });
+      await db.project.update({ where: { id }, data: { status: 'FAILED', error: msg } });
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (error) {

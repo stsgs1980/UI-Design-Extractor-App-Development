@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
 import { runSpec } from '@/lib/pipeline-steps';
+import { serializeComponent } from '@/lib/serialize';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,12 +22,12 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       const zai = await ZAI.create();
       const components = await runSpec(id, zai);
 
-      await db.project.update({ where: { id }, data: { status: 'specced' } });
+      await db.project.update({ where: { id }, data: { status: 'SPECCED' } });
 
-      return NextResponse.json({ components });
+      return NextResponse.json({ components: components.map(serializeComponent) });
     } catch (specError) {
       const msg = specError instanceof Error ? specError.message : 'Spec generation failed';
-      await db.project.update({ where: { id }, data: { status: 'failed', error: msg } });
+      await db.project.update({ where: { id }, data: { status: 'FAILED', error: msg } });
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (error) {

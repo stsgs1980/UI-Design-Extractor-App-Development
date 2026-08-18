@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
 import { runAnalyze } from '@/lib/pipeline-steps';
+import { serializeComponent, serializeToken } from '@/lib/serialize';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,12 +22,15 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       const zai = await ZAI.create();
       const result = await runAnalyze(id, zai, project.componentQuery);
 
-      await db.project.update({ where: { id }, data: { status: 'analyzed' } });
+      await db.project.update({ where: { id }, data: { status: 'ANALYZED' } });
 
-      return NextResponse.json(result);
+      return NextResponse.json({
+        components: result.components.map(serializeComponent),
+        tokens: result.tokens.map(serializeToken),
+      });
     } catch (analyzeError) {
       const msg = analyzeError instanceof Error ? analyzeError.message : 'Analysis failed';
-      await db.project.update({ where: { id }, data: { status: 'failed', error: msg } });
+      await db.project.update({ where: { id }, data: { status: 'FAILED', error: msg } });
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (error) {

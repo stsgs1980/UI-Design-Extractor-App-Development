@@ -7,68 +7,102 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Project {
-  id          String   @id @default(cuid())
-  name        String
-  url         String
-  status      String   @default("pending") // pending, extracting, analyzing, speccing, generating, completed, failed
-  componentQuery String?
-  viewport    String   @default("desktop") // desktop, mobile, tablet
-  screenshotUrl String?
-  rawHtml     String?
-  pageTitle   String?
-  error       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+enum ProjectStatus {
+  PENDING
+  EXTRACTING
+  EXTRACTED
+  ANALYZING
+  ANALYZED
+  SPECCING
+  SPECCED
+  GENERATING
+  COMPLETED
+  FAILED
+}
 
-  components  ExtractedComponent[]
-  tokens      DesignToken[]
+enum ViewportType {
+  DESKTOP
+  MOBILE
+  TABLET
+}
+
+enum CodeFormat {
+  HTML
+  REACT
+  VUE
+}
+
+enum TokenCategory {
+  COLOR
+  SPACING
+  TYPOGRAPHY
+  BORDER_RADIUS
+  SHADOW
+  OPACITY
+}
+
+model Project {
+  id             String        @id @default(cuid())
+  name           String
+  url            String
+  status         ProjectStatus @default(PENDING)
+  componentQuery String?
+  viewport       ViewportType   @default(DESKTOP)
+  screenshotUrl  String?
+  rawHtml        String?
+  pageTitle      String?
+  error          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  components ExtractedComponent[]
+  tokens     DesignToken[]
 }
 
 model ExtractedComponent {
-  id          String   @id @default(cuid())
-  projectId   String
-  name        String
-  tag         String?
-  html        String
-  cssClasses  String?
-  inlineStyles String?
-  spec        String?   // JSON - component specification
-  generatedCode String? // Generated HTML/React/Vue code
-  codeFormat  String   @default("html") // html, react, vue
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String      @id @default(cuid())
+  projectId     String
+  name          String
+  tag           String?
+  html          String
+  cssClasses    String?
+  inlineStyles  String?
+  spec          String?
+  generatedCode String?
+  codeFormat    CodeFormat  @default(HTML)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  references  Reference[]
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  references Reference[]
 }
 
 model DesignToken {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   projectId   String
-  category    String   // color, spacing, typography, border-radius, shadow, opacity
+  category    TokenCategory
   name        String
   value       String
-  originalVar String?  // Original CSS variable name if from :root
-  createdAt   DateTime @default(now())
+  originalVar String?
+  createdAt   DateTime      @default(now())
 
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model Reference {
-  id             String   @id @default(cuid())
-  name           String
-  description    String?
-  sourceUrl      String?
-  componentId    String?  // Link to extracted component
-  html           String
-  css            String?
-  spec           String?  // JSON
-  tags           String   @default("[]") // JSON array of tag strings
-  thumbnail      String?
-  isFavorite     Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  sourceUrl   String?
+  componentId String?
+  html        String
+  css         String?
+  spec        String?
+  tags        String   @default("[]")
+  thumbnail   String?
+  isFavorite  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  component      ExtractedComponent? @relation(fields: [componentId], references: [id])
+  component ExtractedComponent? @relation(fields: [componentId], references: [id])
 }

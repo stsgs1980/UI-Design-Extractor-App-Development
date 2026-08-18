@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
+import { createProjectSchema } from '@/lib/validators';
+import { TO_VIEWPORT_TYPE } from '@/types/extractor';
+import { serializeProject } from '@/lib/serialize';
+
+// ---------- SDK helpers (local to this route) ----------
 
 function cleanSdkError(raw: string): string {
-  // Strip escaped HTML, SDK wrappers, and nginx error pages
   let cleaned = raw
     .replace(/\\u003c[^>]*\\u003e/g, '')
     .replace(/<[^>]*>/g, '')
@@ -30,7 +34,7 @@ async function fetchPageWithRetry(url: string, retries = 3): Promise<{ title: st
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (attempt < retries) {
-        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s
+        const delay = Math.pow(2, attempt) * 1000;
         console.warn(`page_reader attempt ${attempt}/${retries} failed for ${url}, retrying in ${delay}ms...`);
         await new Promise((r) => setTimeout(r, delay));
       }
@@ -38,6 +42,8 @@ async function fetchPageWithRetry(url: string, retries = 3): Promise<{ title: st
   }
   throw lastError || new Error('Page fetch failed after retries');
 }
+
+// ---------- Route handlers ----------
 
 export async function GET() {
   try {
@@ -59,7 +65,7 @@ export async function GET() {
         },
       },
     });
-    return NextResponse.json(projects);
+    return NextResponse.json(projects.map(serializeProject));
   } catch (error) {
     console.error('Failed to list projects:', error);
     return NextResponse.json({ error: 'Failed to list projects' }, { status: 500 });
@@ -69,84 +75,54 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { url, name, componentQuery, viewport } = body;
+    const parsed = createProjectSchema.safeParse(body);
 
-    if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
+        { status: 400 },
+      );
     }
 
+    const { url, name, componentQuery, viewport } = parsed.data;
     const projectName = name || new URL(url).hostname;
+    const prismaViewport = TO_VIEWPORT_TYPE[viewport] ?? 'DESKTOP';
 
-    // Create project with extracting status
     const project = await db.project.create({
       data: {
         name: projectName,
         url,
-        status: 'extracting',
+        status: 'EXTRACTING',
         componentQuery: componentQuery || null,
-        viewport: viewport || 'desktop',
+        viewport: prismaViewport,
       },
     });
 
     try {
-      // Fetch page with retry
       const { title: pageTitle, html: rawHtml } = await fetchPageWithRetry(url);
 
-      // Update project with extracted data
       const updatedProject = await db.project.update({
         where: { id: project.id },
-        data: {
-          pageTitle,
-          rawHtml,
-          status: 'extracted',
-        },
+        data: { pageTitle, rawHtml, status: 'EXTRACTED' },
       });
 
-      const resultProject = {
-        id: updatedProject.id,
-        name: updatedProject.name,
-        url: updatedProject.url,
-        status: updatedProject.status,
-        componentQuery: updatedProject.componentQuery,
-        viewport: updatedProject.viewport,
-        pageTitle: updatedProject.pageTitle,
-        error: updatedProject.error,
-        createdAt: updatedProject.createdAt,
-        updatedAt: updatedProject.updatedAt,
-      };
-      return NextResponse.json(resultProject);
+      return NextResponse.json(serializeProject(updatedProject));
     } catch (extractError) {
       const rawMessage = extractError instanceof Error ? extractError.message : 'Extraction failed';
       const userMessage = cleanSdkError(rawMessage);
 
-      // Update project status to failed
       const failedProject = await db.project.update({
         where: { id: project.id },
-        data: {
-          status: 'failed',
-          error: userMessage,
-        },
+        data: { status: 'FAILED', error: userMessage },
       });
 
-      // Return HTTP 422 so the frontend knows extraction failed
-      return NextResponse.json(
-        {
-          id: failedProject.id,
-          name: failedProject.name,
-          url: failedProject.url,
-          status: failedProject.status,
-          error: failedProject.error,
-          createdAt: failedProject.createdAt,
-          updatedAt: failedProject.updatedAt,
-        },
-        { status: 422 }
-      );
+      return NextResponse.json(serializeProject(failedProject), { status: 422 });
     }
   } catch (error) {
     console.error('Failed to create project:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to create project' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
