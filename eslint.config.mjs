@@ -1,5 +1,6 @@
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
+import reactHooks from "eslint-plugin-react-hooks";
 
 // --- Custom rules (STD-DOC-002 / STD-DOC-003) ---
 import codeBlockLanguage from "./eslint-rules/code-block-language.mjs";
@@ -58,6 +59,9 @@ const eslintConfig = [
   // Rule overrides (existing project rules)
   // ---------------------------------------------------------------
   {
+    plugins: {
+      "react-hooks": reactHooks,
+    },
     rules: {
       // TypeScript rules
       "@typescript-eslint/no-explicit-any": "warn",
@@ -68,7 +72,7 @@ const eslintConfig = [
       "@typescript-eslint/no-unused-disable-directive": "off",
 
       // React rules
-      "react-hooks/exhaustive-deps": "off",
+      "react-hooks/exhaustive-deps": "warn",
       "react-hooks/purity": "off",
       "react/no-unescaped-entities": "off",
       "react/display-name": "off",

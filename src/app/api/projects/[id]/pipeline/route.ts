@@ -4,11 +4,20 @@ import ZAI from 'z-ai-web-dev-sdk';
 import { pipelineRequestSchema } from '@/lib/validators';
 import { runAnalyze, runSpec, runGenerate } from '@/lib/pipeline-steps';
 import { serializeProject, serializeComponent, serializeToken } from '@/lib/serialize';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
+    const rl = checkRateLimit(request, { windowMs: 120_000, maxRequests: 3 });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Too many pipeline requests. Please wait.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
+    }
+
     const { id } = await context.params;
     const body = await request.json();
     const parsed = pipelineRequestSchema.safeParse(body);

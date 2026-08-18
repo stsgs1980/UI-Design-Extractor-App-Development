@@ -4,6 +4,7 @@ import ZAI from 'z-ai-web-dev-sdk';
 import { createProjectSchema } from '@/lib/validators';
 import { TO_VIEWPORT_TYPE } from '@/types/extractor';
 import { serializeProject } from '@/lib/serialize';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // ---------- SDK helpers (local to this route) ----------
 
@@ -74,6 +75,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkRateLimit(request, { windowMs: 60_000, maxRequests: 5 });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please wait a moment.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } },
+      );
+    }
+
     const body = await request.json();
     const parsed = createProjectSchema.safeParse(body);
 
