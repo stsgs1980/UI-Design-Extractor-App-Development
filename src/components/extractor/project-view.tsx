@@ -80,10 +80,32 @@ export function ProjectView() {
     toast.success(`${label} complete`);
   }
 
-  function runAnalyze() { if (!selectedProjectId) return; setIsAnalyzing(true); apiCall(`/api/projects/${selectedProjectId}/analyze`, undefined, 'Analysis').finally(() => setIsAnalyzing(false)); }
-  function runSpec() { if (!selectedProjectId) return; setIsSpecing(true); apiCall(`/api/projects/${selectedProjectId}/spec`, undefined, 'Spec generation').finally(() => setIsSpecing(false)); }
-  function runGenerate() { if (!selectedProjectId) return; setIsGenerating(true); apiCall(`/api/projects/${selectedProjectId}/generate`, { codeFormat }, 'Code generation').finally(() => setIsGenerating(false)); }
-  function runFullPipeline() { if (!selectedProjectId) return; apiCall(`/api/projects/${selectedProjectId}/pipeline`, { codeFormat }, 'Full pipeline'); }
+  async function runAnalyze() {
+    if (!selectedProjectId) return;
+    setIsAnalyzing(true);
+    try { await apiCall(`/api/projects/${selectedProjectId}/analyze`, undefined, 'Analysis'); }
+    catch (err) { toast.error(err instanceof Error ? err.message : 'Analysis failed'); }
+    finally { setIsAnalyzing(false); }
+  }
+  function runSpec() {
+    if (!selectedProjectId) return;
+    setIsSpecing(true);
+    apiCall(`/api/projects/${selectedProjectId}/spec`, undefined, 'Spec generation')
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Spec generation failed'))
+      .finally(() => setIsSpecing(false));
+  }
+  function runGenerate() {
+    if (!selectedProjectId) return;
+    setIsGenerating(true);
+    apiCall(`/api/projects/${selectedProjectId}/generate`, { codeFormat }, 'Code generation')
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Code generation failed'))
+      .finally(() => setIsGenerating(false));
+  }
+  function runFullPipeline() {
+    if (!selectedProjectId) return;
+    apiCall(`/api/projects/${selectedProjectId}/pipeline`, { codeFormat }, 'Full pipeline')
+      .catch((err) => toast.error(err instanceof Error ? err.message : 'Pipeline failed'));
+  }
 
   function copyToClipboard(text: string, id: string) {
     navigator.clipboard.writeText(text);
