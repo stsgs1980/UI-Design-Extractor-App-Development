@@ -20,7 +20,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Search,
-  Star,
   Trash2,
   Copy,
   Check,
@@ -28,16 +27,14 @@ import {
   RotateCcw,
   Loader2,
   Plus,
-  Sparkles,
+  Inbox,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { GlowCard } from '@/components/magic-ui/shimmer-border';
-import { GradientText } from '@/components/magic-ui/gradient-text';
-import { Meteors } from '@/components/magic-ui/meteors';
 import { motion } from 'framer-motion';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import html from 'react-syntax-highlighter/dist/esm/languages/hljs/xml';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { RefCard } from './ref-card';
 
 SyntaxHighlighter.registerLanguage('html', html);
 
@@ -47,8 +44,8 @@ const stagger = {
 };
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
 };
 
 export function ReferencesView() {
@@ -161,20 +158,18 @@ export function ReferencesView() {
   const others = filtered.filter((r) => !r.isFavorite);
 
   return (
-    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-5">
       {/* Header */}
       <motion.div variants={fadeUp} className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            <GradientText>Reference Library</GradientText>
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="text-sm font-semibold">Reference Library</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">
             Save and catalog component references. Regenerate code from saved specs.
           </p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="bg-gradient-to-r from-violet-500 to-purple-500 text-white hover:from-violet-600 hover:to-purple-600">
+            <Button size="sm">
               <Plus className="mr-1.5 h-3.5 w-3.5" /> New Reference
             </Button>
           </DialogTrigger>
@@ -218,29 +213,22 @@ export function ReferencesView() {
 
       {filtered.length === 0 ? (
         <motion.div variants={fadeUp}>
-          <div className="relative overflow-hidden rounded-2xl border border-dashed p-16">
-            <Meteors number={6} />
-            <div className="relative flex flex-col items-center text-center">
-              <motion.div
-                className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/10 ring-1 ring-violet-500/20"
-                animate={{ y: [0, -6, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <Sparkles className="h-7 w-7 text-violet-400" />
-              </motion.div>
-              <h3 className="mt-4 text-sm font-semibold">
-                {search ? 'No matching references' : 'No references saved yet'}
-              </h3>
-              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                {search ? 'Try a different search term.' : 'Save components from your extractions to build a reference library.'}
-              </p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border p-16 text-center">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+              <Inbox className="h-4 w-4 text-muted-foreground" />
             </div>
+            <h3 className="mt-3 text-sm font-semibold">
+              {search ? 'No matching references' : 'No references saved yet'}
+            </h3>
+            <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+              {search ? 'Try a different search term.' : 'Save components from your extractions to build a reference library.'}
+            </p>
           </div>
         </motion.div>
       ) : (
         <motion.div variants={fadeUp} className="grid gap-6 lg:grid-cols-[300px,1fr]">
-          <ScrollArea className="h-[calc(100vh-280px)]">
-            <div className="space-y-3 pr-3">
+          <ScrollArea className="max-h-[calc(100vh-280px)]">
+            <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-3 pr-3">
               {favorites.length > 0 && (
                 <div>
                   <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
@@ -277,72 +265,93 @@ export function ReferencesView() {
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
           </ScrollArea>
 
           {selectedRef ? (
-            <GlowCard glowColor="violet">
-              <div className="p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-base font-semibold">{selectedRef.name}</h3>
-                    {selectedRef.description && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">{selectedRef.description}</p>
+            <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">{selectedRef.name}</h3>
+                  {selectedRef.description && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{selectedRef.description}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8"
+                    onClick={() => handleRegenerate(selectedRef.id)}
+                    disabled={regenerating === selectedRef.id}
+                  >
+                    {regenerating === selectedRef.id ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                     )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8"
-                      onClick={() => handleRegenerate(selectedRef.id)}
-                      disabled={regenerating === selectedRef.id}
-                    >
-                      {regenerating === selectedRef.id ? (
-                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                      )}
-                      Regenerate
-                    </Button>
+                    Regenerate
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(selectedRef.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {selectedRef.sourceUrl && (
+                  <a
+                    href={selectedRef.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    Source <ExternalLink className="h-2.5 w-2.5" />
+                  </a>
+                )}
+                {JSON.parse(selectedRef.tags || '[]').map((tag: string, i: number) => (
+                  <Badge key={i} variant="secondary" className="text-[10px]">{tag}</Badge>
+                ))}
+              </div>
+
+              <div className="mt-5 space-y-5">
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">HTML</p>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(selectedRef.id)}
+                      className="h-6 px-2"
+                      onClick={() => copyToClipboard(selectedRef.html, `ref-${selectedRef.id}`)}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      {copiedId === `ref-${selectedRef.id}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                     </Button>
                   </div>
+                  <SyntaxHighlighter
+                    language="html"
+                    style={atomOneDark}
+                    customStyle={{ borderRadius: '8px', fontSize: '11px', margin: 0, maxHeight: '300px' }}
+                  >
+                    {selectedRef.html}
+                  </SyntaxHighlighter>
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {selectedRef.sourceUrl && (
-                    <a
-                      href={selectedRef.sourceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-violet-400"
-                    >
-                      Source <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  )}
-                  {JSON.parse(selectedRef.tags || '[]').map((tag: string, i: number) => (
-                    <Badge key={i} variant="secondary" className="text-[10px]">{tag}</Badge>
-                  ))}
-                </div>
-
-                <div className="mt-5 space-y-5">
+                {regenResult && (
                   <div>
                     <div className="mb-2 flex items-center justify-between">
-                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">HTML</p>
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Regenerated Code</p>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2"
-                        onClick={() => copyToClipboard(selectedRef.html, `ref-${selectedRef.id}`)}
+                        onClick={() => copyToClipboard(regenResult, `regen-${selectedRef.id}`)}
                       >
-                        {copiedId === `ref-${selectedRef.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                        {copiedId === `regen-${selectedRef.id}` ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                       </Button>
                     </div>
                     <SyntaxHighlighter
@@ -350,89 +359,19 @@ export function ReferencesView() {
                       style={atomOneDark}
                       customStyle={{ borderRadius: '8px', fontSize: '11px', margin: 0, maxHeight: '300px' }}
                     >
-                      {selectedRef.html}
+                      {regenResult}
                     </SyntaxHighlighter>
                   </div>
-
-                  {regenResult && (
-                    <div>
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Regenerated Code</p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 px-2"
-                          onClick={() => copyToClipboard(regenResult, `regen-${selectedRef.id}`)}
-                        >
-                          {copiedId === `regen-${selectedRef.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                        </Button>
-                      </div>
-                      <SyntaxHighlighter
-                        language="html"
-                        style={atomOneDark}
-                        customStyle={{ borderRadius: '8px', fontSize: '11px', margin: 0, maxHeight: '300px' }}
-                      >
-                        {regenResult}
-                      </SyntaxHighlighter>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
-            </GlowCard>
+            </div>
           ) : (
-            <div className="flex h-64 items-center justify-center rounded-xl border border-dashed">
+            <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-border">
               <p className="text-sm text-muted-foreground">Select a reference to view details</p>
             </div>
           )}
         </motion.div>
       )}
     </motion.div>
-  );
-}
-
-function RefCard({
-  reference,
-  isSelected,
-  onClick,
-}: {
-  reference: Reference;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
-  const tags: string[] = JSON.parse(reference.tags || '[]');
-
-  return (
-    <motion.button
-      onClick={onClick}
-      whileHover={{ x: 2 }}
-      className={`w-full rounded-lg border p-3 text-left transition-all ${
-        isSelected
-          ? 'border-violet-500/40 bg-violet-500/5 ring-1 ring-violet-500/20'
-          : 'border-border bg-card/50 hover:bg-card hover:border-border/80'
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <p className="truncate text-sm font-medium">{reference.name}</p>
-        {reference.isFavorite && <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-400" />}
-      </div>
-      {reference.sourceUrl && (
-        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-          {new URL(reference.sourceUrl).hostname}
-        </p>
-      )}
-      {tags.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {tags.slice(0, 3).map((tag, i) => (
-            <Badge key={i} variant="outline" className="text-[10px]">{tag}</Badge>
-          ))}
-          {tags.length > 3 && (
-            <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
-          )}
-        </div>
-      )}
-      <p className="mt-1 text-[10px] text-muted-foreground">
-        {new Date(reference.createdAt).toLocaleDateString()}
-      </p>
-    </motion.button>
   );
 }
