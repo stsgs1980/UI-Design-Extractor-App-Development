@@ -351,11 +351,14 @@ export function DashboardView() {
           <div className="rounded-xl border border-border bg-card shadow-sm">
             <div className="divide-y divide-border">
               {safeProjects.slice(0, 8).map((project) => (
-                <motion.button
+                <motion.div
                   key={project.id}
                   variants={item}
-                  className="group flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-muted/50 first:rounded-t-xl last:rounded-b-xl"
+                  role="button"
+                  tabIndex={0}
+                  className="group flex w-full cursor-pointer items-center gap-4 px-5 py-3.5 text-left transition-colors hover:bg-muted/50 first:rounded-t-xl last:rounded-b-xl"
                   onClick={() => selectProject(project.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') selectProject(project.id); }}
                 >
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
                     <Link2 className="h-4 w-4 text-muted-foreground" />
@@ -397,7 +400,7 @@ export function DashboardView() {
                     </button>
                     <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
                   </div>
-                </motion.button>
+                </motion.div>
               ))}
             </div>
           </div>
