@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useExtractorStore } from '@/store/extractor-store';
 import { STATUS_COLORS, type Project } from '@/types/extractor';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,20 @@ import {
   Activity,
   Sparkles,
   Plus,
+  Trash2,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { NumberTicker } from '@/components/magic-ui/number-ticker';
+import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import {
   AreaChart,
@@ -100,7 +112,8 @@ function KPICard({ title, value, suffix = '', icon: Icon, description, delay = 0
 }
 
 export function DashboardView() {
-  const { projects, setProjects, setView, selectProject, references, setReferences } = useExtractorStore();
+  const { projects, setProjects, setView, selectProject, references, setReferences, removeProject } = useExtractorStore();
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -146,6 +159,22 @@ export function DashboardView() {
       value: Math.floor(Math.random() * safeProjects.length * 3) + 1,
     }));
   }, [safeProjects.length]);
+
+  const deleteTarget = deleteId ? safeProjects.find((p) => p.id === deleteId) : null;
+
+  async function handleDelete() {
+    if (!deleteId) return;
+    try {
+      const res = await fetch(`/api/projects/${deleteId}`, { method: 'DELETE' });
+      if (res.ok) {
+        removeProject(deleteId);
+        toast.success('Project deleted');
+      }
+    } catch {
+      toast.error('Failed to delete project');
+    }
+    setDeleteId(null);
+  }
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-8">
@@ -358,7 +387,16 @@ export function DashboardView() {
                       {new Date(project.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}
+                      className="rounded-md p-1.5 text-muted-foreground/0 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:text-muted-foreground/50"
+                      aria-label="Delete project"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
+                  </div>
                 </motion.button>
               ))}
             </div>
@@ -386,6 +424,24 @@ export function DashboardView() {
           </div>
         </motion.div>
       )}
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <span className="font-medium text-foreground">{deleteTarget?.name}</span> and all its components, tokens, and references. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }

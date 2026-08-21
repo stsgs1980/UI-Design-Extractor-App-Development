@@ -23,6 +23,7 @@ interface ExtractorState {
   setReferences: (refs: Reference[]) => void;
   addReference: (ref: Reference) => void;
   removeReference: (id: string) => void;
+  removeProject: (id: string) => void;
   setPipelineSteps: (steps: PipelineStep[]) => void;
   updatePipelineStep: (stepId: string, status: PipelineStep['status']) => void;
   setProcessing: (processing: boolean) => void;
@@ -60,6 +61,12 @@ export const useExtractorStore = create<ExtractorState>((set, get) => ({
   setReferences: (refs) => set({ references: refs }),
   addReference: (ref) => set((s) => ({ references: [ref, ...s.references] })),
   removeReference: (id) => set((s) => ({ references: s.references.filter((r) => r.id !== id) })),
+  removeProject: (id) => set((s) => ({
+    projects: s.projects.filter((p) => p.id !== id),
+    currentProject: s.currentProject?.id === id ? null : s.currentProject,
+    selectedProjectId: s.selectedProjectId === id ? null : s.selectedProjectId,
+    currentView: s.selectedProjectId === id ? 'dashboard' as const : s.currentView,
+  })),
 
   setPipelineSteps: (steps) => set({ pipelineSteps: steps }),
   updatePipelineStep: (stepId, status) =>
