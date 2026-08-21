@@ -3,13 +3,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useExtractorStore } from '@/store/extractor-store';
 import type { Reference } from '@/types/extractor';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +19,6 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  FolderOpen,
   Search,
   Star,
   Trash2,
@@ -36,13 +28,28 @@ import {
   RotateCcw,
   Loader2,
   Plus,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { GlowCard } from '@/components/magic-ui/shimmer-border';
+import { GradientText } from '@/components/magic-ui/gradient-text';
+import { Meteors } from '@/components/magic-ui/meteors';
+import { motion } from 'framer-motion';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import html from 'react-syntax-highlighter/dist/esm/languages/hljs/xml';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 SyntaxHighlighter.registerLanguage('html', html);
+
+const stagger = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { staggerChildren: 0.06 } },
+};
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+};
 
 export function ReferencesView() {
   const { references, setReferences, removeReference, addReference } = useExtractorStore();
@@ -64,7 +71,7 @@ export function ReferencesView() {
         setReferences(Array.isArray(data) ? data : data.references || []);
       }
     } catch {
-      // ignore
+      // silent
     }
   }, [setReferences]);
 
@@ -122,9 +129,7 @@ export function ReferencesView() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.code) {
-          setRegenResult(data.code);
-        }
+        if (data.code) setRegenResult(data.code);
         toast.success('Regeneration complete');
         fetchReferences();
       }
@@ -156,24 +161,27 @@ export function ReferencesView() {
   const others = filtered.filter((r) => !r.isFavorite);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <motion.div variants={stagger} initial="hidden" animate="show" className="space-y-6">
+      {/* Header */}
+      <motion.div variants={fadeUp} className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reference Library</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-2xl font-bold tracking-tight">
+            <GradientText>Reference Library</GradientText>
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Save and catalog component references. Regenerate code from saved specs.
           </p>
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button size="sm">
+            <Button size="sm" className="bg-gradient-to-r from-violet-500 to-purple-500 text-white hover:from-violet-600 hover:to-purple-600">
               <Plus className="mr-1.5 h-3.5 w-3.5" /> New Reference
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-lg">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Create Reference</DialogTitle>
-              <DialogDescription>Manually create a component reference for your library.</DialogDescription>
+              <DialogDescription>Manually create a component reference.</DialogDescription>
             </DialogHeader>
             <div className="space-y-3 py-2">
               <div className="space-y-2">
@@ -182,13 +190,7 @@ export function ReferencesView() {
               </div>
               <div className="space-y-2">
                 <Label>HTML</Label>
-                <Textarea
-                  value={newHtml}
-                  onChange={(e) => setNewHtml(e.target.value)}
-                  placeholder="Paste component HTML here..."
-                  rows={6}
-                  className="font-mono text-xs"
-                />
+                <Textarea value={newHtml} onChange={(e) => setNewHtml(e.target.value)} placeholder="Paste component HTML here..." rows={6} className="font-mono text-xs" />
               </div>
               <div className="space-y-2">
                 <Label>Tags (comma separated)</Label>
@@ -201,10 +203,10 @@ export function ReferencesView() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </motion.div>
 
       {/* Search */}
-      <div className="relative">
+      <motion.div variants={fadeUp} className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search references by name or tag..."
@@ -212,29 +214,36 @@ export function ReferencesView() {
           onChange={(e) => setSearch(e.target.value)}
           className="pl-9"
         />
-      </div>
+      </motion.div>
 
       {filtered.length === 0 ? (
-        <Card className="border-dashed bg-card/30">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <FolderOpen className="h-8 w-8 text-muted-foreground" />
-            <h3 className="mt-4 text-sm font-semibold">
-              {search ? 'No matching references' : 'No references saved yet'}
-            </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {search
-                ? 'Try a different search term.'
-                : 'Save components from your extractions to build a reference library.'}
-            </p>
-          </CardContent>
-        </Card>
+        <motion.div variants={fadeUp}>
+          <div className="relative overflow-hidden rounded-2xl border border-dashed p-16">
+            <Meteors number={6} />
+            <div className="relative flex flex-col items-center text-center">
+              <motion.div
+                className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/10 ring-1 ring-violet-500/20"
+                animate={{ y: [0, -6, 0] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                <Sparkles className="h-7 w-7 text-violet-400" />
+              </motion.div>
+              <h3 className="mt-4 text-sm font-semibold">
+                {search ? 'No matching references' : 'No references saved yet'}
+              </h3>
+              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                {search ? 'Try a different search term.' : 'Save components from your extractions to build a reference library.'}
+              </p>
+            </div>
+          </div>
+        </motion.div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[300px,1fr]">
+        <motion.div variants={fadeUp} className="grid gap-6 lg:grid-cols-[300px,1fr]">
           <ScrollArea className="h-[calc(100vh-280px)]">
             <div className="space-y-3 pr-3">
               {favorites.length > 0 && (
                 <div>
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Favorites
                   </p>
                   <div className="space-y-1.5">
@@ -252,7 +261,7 @@ export function ReferencesView() {
               {others.length > 0 && (
                 <div>
                   {favorites.length > 0 && (
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                       All References
                     </p>
                   )}
@@ -272,67 +281,68 @@ export function ReferencesView() {
           </ScrollArea>
 
           {selectedRef ? (
-            <div className="space-y-4">
-              <Card className="bg-card/50 backdrop-blur-sm">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-base">{selectedRef.name}</CardTitle>
-                      {selectedRef.description && (
-                        <CardDescription className="mt-0.5">{selectedRef.description}</CardDescription>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleRegenerate(selectedRef.id)}
-                        disabled={regenerating === selectedRef.id}
-                      >
-                        {regenerating === selectedRef.id ? (
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-                        )}
-                        Regenerate
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => handleDelete(selectedRef.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {selectedRef.sourceUrl && (
-                      <a
-                        href={selectedRef.sourceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        Source <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
-                    )}
-                    {JSON.parse(selectedRef.tags || '[]').map((tag: string, i: number) => (
-                      <Badge key={i} variant="secondary" className="text-[10px]">{tag}</Badge>
-                    ))}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
+            <GlowCard glowColor="violet">
+              <div className="p-5">
+                <div className="flex items-start justify-between">
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <p className="text-xs font-medium text-muted-foreground">HTML</p>
+                    <h3 className="text-base font-semibold">{selectedRef.name}</h3>
+                    {selectedRef.description && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{selectedRef.description}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => handleRegenerate(selectedRef.id)}
+                      disabled={regenerating === selectedRef.id}
+                    >
+                      {regenerating === selectedRef.id ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Regenerate
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(selectedRef.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {selectedRef.sourceUrl && (
+                    <a
+                      href={selectedRef.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-violet-400"
+                    >
+                      Source <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  )}
+                  {JSON.parse(selectedRef.tags || '[]').map((tag: string, i: number) => (
+                    <Badge key={i} variant="secondary" className="text-[10px]">{tag}</Badge>
+                  ))}
+                </div>
+
+                <div className="mt-5 space-y-5">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">HTML</p>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2"
                         onClick={() => copyToClipboard(selectedRef.html, `ref-${selectedRef.id}`)}
                       >
-                        {copiedId === `ref-${selectedRef.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        {copiedId === `ref-${selectedRef.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
                       </Button>
                     </div>
                     <SyntaxHighlighter
@@ -346,15 +356,15 @@ export function ReferencesView() {
 
                   {regenResult && (
                     <div>
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <p className="text-xs font-medium text-muted-foreground">Regenerated Code</p>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Regenerated Code</p>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-6 px-2"
                           onClick={() => copyToClipboard(regenResult, `regen-${selectedRef.id}`)}
                         >
-                          {copiedId === `regen-${selectedRef.id}` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                          {copiedId === `regen-${selectedRef.id}` ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
                         </Button>
                       </div>
                       <SyntaxHighlighter
@@ -366,17 +376,17 @@ export function ReferencesView() {
                       </SyntaxHighlighter>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            </div>
+                </div>
+              </div>
+            </GlowCard>
           ) : (
-            <div className="flex h-64 items-center justify-center rounded-lg border border-dashed">
+            <div className="flex h-64 items-center justify-center rounded-xl border border-dashed">
               <p className="text-sm text-muted-foreground">Select a reference to view details</p>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -392,10 +402,13 @@ function RefCard({
   const tags: string[] = JSON.parse(reference.tags || '[]');
 
   return (
-    <button
+    <motion.button
       onClick={onClick}
-      className={`w-full rounded-lg border p-3 text-left transition-colors ${
-        isSelected ? 'border-primary bg-primary/5' : 'border-border bg-card/50 hover:bg-card'
+      whileHover={{ x: 2 }}
+      className={`w-full rounded-lg border p-3 text-left transition-all ${
+        isSelected
+          ? 'border-violet-500/40 bg-violet-500/5 ring-1 ring-violet-500/20'
+          : 'border-border bg-card/50 hover:bg-card hover:border-border/80'
       }`}
     >
       <div className="flex items-start justify-between">
@@ -410,9 +423,7 @@ function RefCard({
       {tags.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {tags.slice(0, 3).map((tag, i) => (
-            <Badge key={i} variant="outline" className="text-[10px]">
-              {tag}
-            </Badge>
+            <Badge key={i} variant="outline" className="text-[10px]">{tag}</Badge>
           ))}
           {tags.length > 3 && (
             <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
@@ -422,6 +433,6 @@ function RefCard({
       <p className="mt-1 text-[10px] text-muted-foreground">
         {new Date(reference.createdAt).toLocaleDateString()}
       </p>
-    </button>
+    </motion.button>
   );
 }
