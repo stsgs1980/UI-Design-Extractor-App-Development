@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useExtractorStore } from '@/store/extractor-store';
 import {
@@ -10,7 +11,9 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Command,
+  Trash2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { AppView } from '@/types/extractor';
 
 interface NavItem {
@@ -27,8 +30,26 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export function AppSidebar() {
-  const { currentView, setView, sidebarOpen, toggleSidebar, projects } = useExtractorStore();
+  const { currentView, setView, sidebarOpen, toggleSidebar, projects, removeProject } = useExtractorStore();
   const recentProjects = (projects || []).slice(0, 5);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDeleteProject(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        removeProject(id);
+        toast.success('Project deleted');
+      } else {
+        toast.error('Failed to delete project');
+      }
+    } catch {
+      toast.error('Failed to delete project');
+    }
+    setDeletingId(null);
+  }
 
   return (
     <aside
@@ -92,27 +113,40 @@ export function AppSidebar() {
               Recent
             </p>
             <div className="space-y-0.5">
-              {recentProjects.map((project) => (
-                <button
-                  key={project.id}
-                  onClick={() => useExtractorStore.getState().selectProject(project.id)}
-                  className={cn(
-                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors',
-                    currentView === 'project' &&
-                      useExtractorStore.getState().selectedProjectId === project.id
-                      ? 'bg-sidebar-accent text-sidebar-foreground'
-                      : 'text-sidebar-foreground/50 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                  )}
-                >
+              {recentProjects.map((project) => {
+                const isActive = currentView === 'project' && useExtractorStore.getState().selectedProjectId === project.id;
+                return (
                   <div
+                    key={project.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => useExtractorStore.getState().selectProject(project.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') useExtractorStore.getState().selectProject(project.id); }}
                     className={cn(
-                      'h-1.5 w-1.5 shrink-0 rounded-full',
-                      project.status === 'completed' ? 'bg-emerald-500' : 'bg-sidebar-foreground/30'
+                      'group flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors cursor-pointer',
+                      isActive
+                        ? 'bg-sidebar-accent text-sidebar-foreground'
+                        : 'text-sidebar-foreground/50 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                     )}
-                  />
-                  <span className="truncate text-xs">{project.name}</span>
-                </button>
-              ))}
+                  >
+                    <div
+                      className={cn(
+                        'h-1.5 w-1.5 shrink-0 rounded-full',
+                        project.status === 'completed' ? 'bg-emerald-500' : 'bg-sidebar-foreground/30'
+                      )}
+                    />
+                    <span className="truncate text-xs flex-1">{project.name}</span>
+                    <button
+                      onClick={(e) => handleDeleteProject(e, project.id)}
+                      disabled={deletingId === project.id}
+                      className="shrink-0 rounded p-0.5 text-sidebar-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                      aria-label={"Delete " + project.name}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
