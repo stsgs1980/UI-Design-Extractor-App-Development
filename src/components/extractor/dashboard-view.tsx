@@ -393,7 +393,7 @@ export function DashboardView() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}
-                      className="rounded-md p-1.5 text-muted-foreground/0 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:text-muted-foreground/50"
+                      className="shrink-0 rounded-md p-1.5 text-muted-foreground/30 transition-all hover:bg-destructive/10 hover:text-destructive"
                       aria-label="Delete project"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
