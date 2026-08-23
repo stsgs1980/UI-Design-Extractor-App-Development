@@ -49,6 +49,7 @@ const CATEGORY_MAP: Record<string, TokenCategory> = {
 // ---------------------------------------------------------------------------
 
 export async function runAnalyze(projectId: string, zai: ZaiClient, componentQuery: string | null) {
+  console.log('[pipeline:analyze] start for project:', projectId);
   const project = await db.project.findUnique({ where: { id: projectId } });
   if (!project || !project.rawHtml) {
     throw new Error('No HTML data to analyze');
@@ -67,9 +68,11 @@ export async function runAnalyze(projectId: string, zai: ZaiClient, componentQue
   });
 
   const response = completion.choices[0]?.message?.content;
+  console.log('[pipeline:analyze] LLM response length:', response?.length);
   if (!response) throw new Error('Empty LLM response during analysis');
 
   const parsed = JSON.parse(repairJson(stripMarkdownFences(response)));
+  console.log('[pipeline:analyze] parsed components:', (parsed.components || []).length, 'tokens:', (parsed.designTokens || []).length);
 
   const validComponents = (parsed.components || []).filter(
     (c: LlmComponent) =>
@@ -77,6 +80,7 @@ export async function runAnalyze(projectId: string, zai: ZaiClient, componentQue
   );
 
   if (validComponents.length === 0) {
+    console.error('[pipeline:analyze] no valid components found');
     throw new Error('No valid components found in the analysis. The page may be too simple or the LLM could not parse it.');
   }
 
@@ -121,6 +125,7 @@ export async function runAnalyze(projectId: string, zai: ZaiClient, componentQue
     return [comps, tokens] as const;
   });
 
+  console.log('[pipeline:analyze] done, created', createdComponents.length, 'components,', createdTokens.length, 'tokens');
   return { components: createdComponents, tokens: createdTokens };
 }
 
@@ -129,6 +134,7 @@ export async function runAnalyze(projectId: string, zai: ZaiClient, componentQue
 // ---------------------------------------------------------------------------
 
 export async function runSpec(projectId: string, zai: ZaiClient) {
+  console.log('[pipeline:spec] start for project:', projectId);
   const project = await db.project.findUnique({
     where: { id: projectId },
     include: { components: true },
@@ -140,8 +146,12 @@ export async function runSpec(projectId: string, zai: ZaiClient) {
   await db.project.update({ where: { id: projectId }, data: { status: 'SPECCING' as ProjectStatus } });
 
   const updatedComponents = [];
+  console.log('[pipeline:spec] processing', project.components.length, 'components');
 
-  for (const component of project.components) {
+  for (let i = 0; i < project.components.length; i++) {
+    const component = project.components[i];
+    console.log('[pipeline:spec]', i + 1, '/', project.components.length, component.name);
+
     const userPrompt = buildSpecUserPrompt(component);
 
     const completion = await zai.chat.completions.create({
@@ -153,7 +163,10 @@ export async function runSpec(projectId: string, zai: ZaiClient) {
     });
 
     const response = completion.choices[0]?.message?.content;
-    if (!response) continue;
+    if (!response) {
+      console.warn('[pipeline:spec] empty response for', component.name);
+      continue;
+    }
 
     const cleaned = stripMarkdownFences(response);
 
@@ -179,6 +192,7 @@ export async function runSpec(projectId: string, zai: ZaiClient) {
     updatedComponents.push(updated);
   }
 
+  console.log('[pipeline:spec] done, updated', updatedComponents.length, 'components');
   return updatedComponents;
 }
 
@@ -187,6 +201,7 @@ export async function runSpec(projectId: string, zai: ZaiClient) {
 // ---------------------------------------------------------------------------
 
 export async function runGenerate(projectId: string, zai: ZaiClient, codeFormat: string) {
+  console.log('[pipeline:generate] start for project:', projectId, 'format:', codeFormat);
   const project = await db.project.findUnique({
     where: { id: projectId },
     include: { components: true, tokens: true },
@@ -199,6 +214,7 @@ export async function runGenerate(projectId: string, zai: ZaiClient, codeFormat:
 
   await db.project.update({ where: { id: projectId }, data: { status: 'GENERATING' as ProjectStatus } });
 
+  console.log('[pipeline:generate]', componentsWithSpecs.length, 'components to generate, tokens:', project.tokens.length);
   const prismaCodeFormat = (TO_CODE_FORMAT[codeFormat] || 'HTML') as CodeFormat;
 
   const tokensContext = project.tokens.length > 0
@@ -207,7 +223,10 @@ export async function runGenerate(projectId: string, zai: ZaiClient, codeFormat:
 
   const updatedComponents = [];
 
-  for (const component of componentsWithSpecs) {
+  for (let i = 0; i < componentsWithSpecs.length; i++) {
+    const component = componentsWithSpecs[i];
+    console.log('[pipeline:generate]', i + 1, '/', componentsWithSpecs.length, component.name);
+
     const userPrompt = buildGenerateUserPrompt({
       spec: component.spec!,
       html: component.html,
@@ -224,7 +243,10 @@ export async function runGenerate(projectId: string, zai: ZaiClient, codeFormat:
     });
 
     const response = completion.choices[0]?.message?.content;
-    if (!response) continue;
+    if (!response) {
+      console.warn('[pipeline:generate] empty response for', component.name);
+      continue;
+    }
 
     const updated = await db.extractedComponent.update({
       where: { id: component.id },
@@ -234,7 +256,9 @@ export async function runGenerate(projectId: string, zai: ZaiClient, codeFormat:
       },
     });
     updatedComponents.push(updated);
+    console.log('[pipeline:generate] done:', component.name, '| code length:', stripMarkdownFences(response).length);
   }
 
+  console.log('[pipeline:generate] completed, generated', updatedComponents.length, 'codes');
   return updatedComponents;
 }

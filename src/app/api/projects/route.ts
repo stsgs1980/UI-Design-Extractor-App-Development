@@ -48,6 +48,7 @@ async function fetchPageWithRetry(url: string, retries = 3): Promise<{ title: st
 
 export async function GET() {
   try {
+    console.log('[api:projects] GET /api/projects');
     const projects = await db.project.findMany({
       orderBy: { createdAt: 'desc' },
       select: {
@@ -66,9 +67,10 @@ export async function GET() {
         },
       },
     });
+    console.log('[api:projects] returning', projects.length, 'projects');
     return NextResponse.json(projects.map(serializeProject));
   } catch (error) {
-    console.error('Failed to list projects:', error);
+    console.error('[api:projects] GET FAILED:', error);
     return NextResponse.json({ error: 'Failed to list projects' }, { status: 500 });
   }
 }
@@ -84,9 +86,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    console.log('[api:projects] POST body:', { url: body.url, name: body.name, viewport: body.viewport });
     const parsed = createProjectSchema.safeParse(body);
 
     if (!parsed.success) {
+      console.warn('[api:projects] validation failed:', parsed.error.flatten().fieldErrors);
       return NextResponse.json(
         { error: 'Validation failed', details: parsed.error.flatten().fieldErrors },
         { status: 400 },
@@ -97,6 +101,7 @@ export async function POST(request: NextRequest) {
     const projectName = name || new URL(url).hostname;
     const prismaViewport = TO_VIEWPORT_TYPE[viewport] ?? 'DESKTOP';
 
+    console.log('[api:projects] creating project:', projectName, url);
     const project = await db.project.create({
       data: {
         name: projectName,
@@ -107,17 +112,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    console.log('[api:projects] fetching page:', url);
     try {
       const { title: pageTitle, html: rawHtml } = await fetchPageWithRetry(url);
+      console.log('[api:projects] page fetched, title:', pageTitle, 'html length:', rawHtml.length);
 
       const updatedProject = await db.project.update({
         where: { id: project.id },
         data: { pageTitle, rawHtml, status: 'EXTRACTED' },
       });
 
+      console.log('[api:projects] project extracted:', project.id, projectName);
       return NextResponse.json(serializeProject(updatedProject));
     } catch (extractError) {
       const rawMessage = extractError instanceof Error ? extractError.message : 'Extraction failed';
+      console.error('[api:projects] extraction failed:', rawMessage);
       const userMessage = cleanSdkError(rawMessage);
 
       const failedProject = await db.project.update({

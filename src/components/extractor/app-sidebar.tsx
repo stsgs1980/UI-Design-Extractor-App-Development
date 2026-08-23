@@ -36,16 +36,22 @@ export function AppSidebar() {
 
   async function handleDeleteProject(e: React.MouseEvent, id: string) {
     e.stopPropagation();
+    console.log('[sidebar] delete requested for project:', id);
     setDeletingId(id);
     try {
       const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      console.log('[sidebar] DELETE response status:', res.status);
       if (res.ok) {
         removeProject(id);
         toast.success('Project deleted');
+        console.log('[sidebar] project removed from store:', id);
       } else {
+        const body = await res.text();
+        console.error('[sidebar] DELETE failed:', res.status, body);
         toast.error('Failed to delete project');
       }
-    } catch {
+    } catch (err) {
+      console.error('[sidebar] DELETE exception:', err);
       toast.error('Failed to delete project');
     }
     setDeletingId(null);

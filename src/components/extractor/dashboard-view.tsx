@@ -164,13 +164,21 @@ export function DashboardView() {
 
   async function handleDelete() {
     if (!deleteId) return;
+    console.log('[dashboard] delete requested for project:', deleteId);
     try {
       const res = await fetch(`/api/projects/${deleteId}`, { method: 'DELETE' });
+      console.log('[dashboard] DELETE response status:', res.status);
       if (res.ok) {
         removeProject(deleteId);
         toast.success('Project deleted');
+        console.log('[dashboard] project removed from store:', deleteId);
+      } else {
+        const body = await res.text();
+        console.error('[dashboard] DELETE failed:', res.status, body);
+        toast.error('Failed to delete project');
       }
-    } catch {
+    } catch (err) {
+      console.error('[dashboard] DELETE exception:', err);
       toast.error('Failed to delete project');
     }
     setDeleteId(null);
