@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+build
+db/*.db
+*.db
+public
+upload
+download
+Z-ai-platform
+.git
+bun.lockb
+package-lock.json
+examples
+mini-services/*/node_modules
+mini-services/*/.next

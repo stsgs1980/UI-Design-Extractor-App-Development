@@ -1,0 +1,37 @@
+# ==============================================================================
+# pre-commit hook -- Next.js project (adapted from Z-ai-platform, 2026-07-07)
+# ==============================================================================
+#
+# Enforcement groups (run in order):
+#
+#   0. Source file line-count check (RULE-MONOLITH-012, HARD)
+#   1. ESLint on staged files (with --max-warnings=0)
+#   2. Prettier format check on staged files
+#   3. TypeScript type check (fast, no emit)
+#
+# Bypass (emergencies only): git commit --no-verify
+# ==============================================================================
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# --- Group 0: Anti-monolith line-count check (RULE-MONOLITH-012) ----------------
+# Source files (.ts/.tsx/.js/.jsx): hard limit 250 lines, soft 150
+# Guard scripts (.sh): hard limit 250 lines
+LINECOUNT_SCRIPT="scripts/check-line-count.sh"
+if [ -f "$LINECOUNT_SCRIPT" ]; then
+  echo "[pre-commit] Checking file line limits (RULE-MONOLITH-012)..."
+  if ! bash "$LINECOUNT_SCRIPT" --hard 2>&1; then
+    echo "[pre-commit] FAIL: file exceeds line limit. Split before committing."
+    echo "[pre-commit] See RULE-MONOLITH-012 for split guidance."
+    exit 1
+  fi
+fi
+
+# --- Group 1-2: lint-staged (eslint + prettier on staged files) ---------------
+echo "[pre-commit] Running lint-staged (eslint + prettier)..."
+npx lint-staged
+
+exit 0
