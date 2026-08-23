@@ -89,7 +89,7 @@ export default function Home() {
               )}
             >
               <div className="flex items-center gap-2">
-                <span className="font-medium text-foreground/70">UI Extractor</span>
+                <span className="font-medium text-foreground/70">UI Design Extractor</span>
                 <span className="text-border">/</span>
                 <span className="hidden sm:inline">URL → Analyze → Spec → Generate</span>
               </div>

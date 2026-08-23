@@ -1,4 +1,4 @@
-# UI Extractor
+# UI Design Extractor
 
 AI-powered tool that deconstructs any public website into reusable UI components, design tokens, and specifications. Feed it a URL, and the four-stage pipeline produces clean, production-ready code in HTML, React JSX, or Vue SFC format.
 
@@ -89,7 +89,7 @@ Each stage can run individually via dedicated API endpoints, or all at once with
 
 ```bash
 git clone <repo-url>
-cd ui-extractor
+cd ui-design-extractor
 bun install
 bun run db:push
 ```

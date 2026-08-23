@@ -75,7 +75,7 @@ export function AppSidebar() {
         </div>
         {sidebarOpen && (
           <div className="flex flex-col overflow-hidden">
-            <span className="text-sm font-semibold text-sidebar-foreground">UI Extractor</span>
+            <span className="text-sm font-semibold text-sidebar-foreground">UI Design Extractor</span>
             <span className="text-[11px] text-sidebar-foreground/50">Deconstruct any website</span>
           </div>
         )}
