@@ -127,7 +127,7 @@ export function ExtractView() {
 
     pollingTimer.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}`);
+        const res = await fetch(`/api/projects/${projectId}/status`);
         if (!res.ok) return;
         const project = await res.json();
         const status: string = project.status;
@@ -240,7 +240,7 @@ export function ExtractView() {
 
     pollingTimer.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/projects/${projectId}`);
+        const res = await fetch(`/api/projects/${projectId}/status`);
         if (!res.ok) return;
         const project = await res.json();
         const status: string = project.status;
