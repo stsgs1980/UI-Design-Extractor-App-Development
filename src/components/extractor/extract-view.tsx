@@ -197,6 +197,9 @@ export function ExtractView() {
     setCurrentSteps(PIPELINE_STEPS.map((s) => ({ ...s, status: 'pending' })));
     console.log('[extract] starting pipeline for:', fullUrl, '| fullPipeline:', runFullPipeline);
 
+    // Clear logs so the user sees a fresh log for this extraction
+    fetch('/api/logs', { method: 'POST' }).catch(() => {});
+
     try {
       // Step 1: Create project (extraction runs in background)
       setCurrentSteps((prev) => prev.map((s) => (s.id === 'extract' ? { ...s, status: 'running' as const } : s)));
