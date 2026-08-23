@@ -4,6 +4,7 @@ import ZAI from 'z-ai-web-dev-sdk';
 import { pipelineRequestSchema } from '@/lib/validators';
 import { runGenerate } from '@/lib/pipeline-steps';
 import { serializeComponent } from '@/lib/serialize';
+import { safeUpdateProjectStatus } from '@/lib/safe-update';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -36,12 +37,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       const zai = await ZAI.create();
       const components = await runGenerate(id, zai, codeFormat);
 
-      await db.project.update({ where: { id }, data: { status: 'COMPLETED' } });
+      await safeUpdateProjectStatus(id, 'COMPLETED');
 
       return NextResponse.json({ components: components.map(serializeComponent) });
     } catch (generateError) {
       const msg = generateError instanceof Error ? generateError.message : 'Code generation failed';
-      await db.project.update({ where: { id }, data: { status: 'FAILED', error: msg } });
+      await safeUpdateProjectStatus(id, 'FAILED', msg);
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (error) {

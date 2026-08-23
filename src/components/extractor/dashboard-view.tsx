@@ -173,9 +173,10 @@ export function DashboardView() {
         toast.success('Project deleted');
         console.log('[dashboard] project removed from store:', deleteId);
       } else {
-        const body = await res.text();
-        console.error('[dashboard] DELETE failed:', res.status, body);
-        toast.error('Failed to delete project');
+        const body = await res.json().catch(() => null);
+        const errorMsg = body?.error || 'Failed to delete project';
+        console.error('[dashboard] DELETE failed:', res.status, errorMsg);
+        toast.error(errorMsg);
       }
     } catch (err) {
       console.error('[dashboard] DELETE exception:', err);
@@ -399,13 +400,22 @@ export function DashboardView() {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}
-                      className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      aria-label="Delete project"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {(project.status === 'extracting' || project.status === 'analyzing' || project.status === 'speccing' || project.status === 'generating') ? (
+                      <div
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground/20"
+                        title="Cannot delete while processing"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                        aria-label="Delete project"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground" />
                   </div>
                 </motion.div>

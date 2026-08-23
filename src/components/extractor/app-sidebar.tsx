@@ -49,9 +49,10 @@ export function AppSidebar() {
         toast.success('Project deleted');
         console.log('[sidebar] project removed from store:', id);
       } else {
-        const body = await res.text();
-        console.error('[sidebar] DELETE failed:', res.status, body);
-        toast.error('Failed to delete project');
+        const body = await res.json().catch(() => null);
+        const errorMsg = body?.error || 'Failed to delete project';
+        console.error('[sidebar] DELETE failed:', res.status, errorMsg);
+        toast.error(errorMsg);
       }
     } catch (err) {
       console.error('[sidebar] DELETE exception:', err);
@@ -145,14 +146,20 @@ export function AppSidebar() {
                       )}
                     />
                     <span className="truncate text-xs flex-1">{project.name}</span>
-                    <button
-                      onClick={(e) => handleDeleteProject(e, project.id)}
-                      disabled={deletingId === project.id}
-                      className="shrink-0 rounded p-0.5 text-sidebar-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                      aria-label={"Delete " + project.name}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
+                    {(project.status === 'extracting' || project.status === 'analyzing' || project.status === 'speccing' || project.status === 'generating') ? (
+                      <div className="shrink-0 rounded p-0.5 text-sidebar-foreground/20" title="Cannot delete while processing">
+                        <Trash2 className="h-3 w-3" />
+                      </div>
+                    ) : (
+                      <button
+                        onClick={(e) => handleDeleteProject(e, project.id)}
+                        disabled={deletingId === project.id}
+                        className="shrink-0 rounded p-0.5 text-sidebar-foreground/30 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                        aria-label={"Delete " + project.name}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                 );
               })}

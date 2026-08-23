@@ -5,6 +5,7 @@ import { pipelineRequestSchema } from '@/lib/validators';
 import { runAnalyze, runSpec, runGenerate } from '@/lib/pipeline-steps';
 import { serializeProject, serializeComponent, serializeToken } from '@/lib/serialize';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { safeUpdateProjectStatus } from '@/lib/safe-update';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     } catch (pipelineError) {
       const msg = pipelineError instanceof Error ? pipelineError.message : 'Pipeline failed';
       console.error('[api:pipeline] step FAILED:', msg);
-      await db.project.update({ where: { id }, data: { status: 'FAILED', error: msg } });
+      await safeUpdateProjectStatus(id, 'FAILED', msg);
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { serializeProject, serializeComponent, serializeToken } from '@/lib/serialize';
+import { PROCESSING_STATUSES } from '@/lib/safe-update';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -36,11 +37,19 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
     console.log('[api:delete] DELETE /api/projects/', id);
 
     const project = await db.project.findUnique({ where: { id } });
-    console.log('[api:delete] project found:', !!project, project?.name);
+    console.log('[api:delete] project found:', !!project, project?.name, '| status:', project?.status);
 
     if (!project) {
       console.warn('[api:delete] project not found:', id);
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    if (PROCESSING_STATUSES.includes(project.status)) {
+      console.warn('[api:delete] cannot delete, project is being processed:', id, project.status);
+      return NextResponse.json(
+        { error: `Cannot delete project while it is being processed (status: ${project.status})` },
+        { status: 409 },
+      );
     }
 
     const components = await db.extractedComponent.findMany({

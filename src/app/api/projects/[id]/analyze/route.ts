@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
 import { runAnalyze } from '@/lib/pipeline-steps';
 import { serializeComponent, serializeToken } from '@/lib/serialize';
+import { safeUpdateProjectStatus } from '@/lib/safe-update';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,7 +23,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       const zai = await ZAI.create();
       const result = await runAnalyze(id, zai, project.componentQuery);
 
-      await db.project.update({ where: { id }, data: { status: 'ANALYZED' } });
+      await safeUpdateProjectStatus(id, 'ANALYZED');
 
       return NextResponse.json({
         components: result.components.map(serializeComponent),
@@ -30,7 +31,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       });
     } catch (analyzeError) {
       const msg = analyzeError instanceof Error ? analyzeError.message : 'Analysis failed';
-      await db.project.update({ where: { id }, data: { status: 'FAILED', error: msg } });
+      await safeUpdateProjectStatus(id, 'FAILED', msg);
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (error) {
