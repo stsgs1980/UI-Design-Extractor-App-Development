@@ -56,8 +56,9 @@ export function LogViewer({ open, onOpenChange }: { open: boolean; onOpenChange:
   }, [open]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const viewport = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement | null;
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
     }
   }, [lines]);
 
@@ -73,7 +74,7 @@ export function LogViewer({ open, onOpenChange }: { open: boolean; onOpenChange:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[80vh] w-full max-w-3xl flex-col gap-0 p-0">
+      <DialogContent className="flex max-h-[80vh] w-full max-w-3xl flex-col gap-0 p-0 overflow-hidden">
         <DialogHeader className="flex flex-row items-center justify-between border-b border-border px-5 py-3">
           <div className="flex items-center gap-2">
             <Terminal className="h-4 w-4 text-muted-foreground" />
@@ -112,7 +113,7 @@ export function LogViewer({ open, onOpenChange }: { open: boolean; onOpenChange:
             </Button>
           </div>
         </DialogHeader>
-        <ScrollArea className="flex-1" ref={scrollRef}>
+        <ScrollArea className="min-h-0 flex-1" ref={scrollRef}>
           <div className="font-mono text-[11px] leading-5">
             {filtered.length === 0 ? (
               <div className="px-5 py-8 text-center text-muted-foreground">
