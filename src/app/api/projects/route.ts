@@ -5,6 +5,7 @@ import { createProjectSchema } from '@/lib/validators';
 import { TO_VIEWPORT_TYPE } from '@/types/extractor';
 import { serializeProject } from '@/lib/serialize';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { safeUpdateProjectStatus } from '@/lib/safe-update';
 
 // ---------- SDK helpers (local to this route) ----------
 
@@ -21,27 +22,40 @@ function cleanSdkError(raw: string): string {
   return cleaned;
 }
 
-async function fetchPageWithRetry(url: string, retries = 3): Promise<{ title: string; html: string }> {
+async function fetchPageAndUpdate(projectId: string, url: string) {
+  console.log('[api:projects:extract] starting background extraction for:', projectId, url);
   const zai = await ZAI.create();
   let lastError: Error | null = null;
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const result = await zai.functions.invoke('page_reader', { url });
       const title = result.data?.title || '';
       const html = result.data?.html || '';
       if (!html) throw new Error('Empty HTML received from page reader');
-      return { title, html };
+
+      console.log('[api:projects:extract] page fetched, title:', title, 'html length:', html.length);
+      await db.project.update({
+        where: { id: projectId },
+        data: { pageTitle: title, rawHtml: html, status: 'EXTRACTED' },
+      });
+      console.log('[api:projects:extract] project extracted:', projectId);
+      return;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt < retries) {
+      if (attempt < 3) {
         const delay = Math.pow(2, attempt) * 1000;
-        console.warn(`page_reader attempt ${attempt}/${retries} failed for ${url}, retrying in ${delay}ms...`);
+        console.warn(`[api:projects:extract] attempt ${attempt}/3 failed, retrying in ${delay}ms...`);
         await new Promise((r) => setTimeout(r, delay));
       }
     }
   }
-  throw lastError || new Error('Page fetch failed after retries');
+
+  // All retries failed
+  const rawMessage = lastError?.message || 'Extraction failed';
+  console.error('[api:projects:extract] all retries failed:', rawMessage);
+  const userMessage = cleanSdkError(rawMessage);
+  await safeUpdateProjectStatus(projectId, 'FAILED', userMessage);
 }
 
 // ---------- Route handlers ----------
@@ -112,30 +126,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log('[api:projects] fetching page:', url);
-    try {
-      const { title: pageTitle, html: rawHtml } = await fetchPageWithRetry(url);
-      console.log('[api:projects] page fetched, title:', pageTitle, 'html length:', rawHtml.length);
+    console.log('[api:projects] project created:', project.id, '| starting background extraction');
 
-      const updatedProject = await db.project.update({
-        where: { id: project.id },
-        data: { pageTitle, rawHtml, status: 'EXTRACTED' },
-      });
+    // Fire-and-forget: extract page in background, don't block the response
+    fetchPageAndUpdate(project.id, url).catch((err) => {
+      console.error('[api:projects] background extraction crashed:', err);
+    });
 
-      console.log('[api:projects] project extracted:', project.id, projectName);
-      return NextResponse.json(serializeProject(updatedProject));
-    } catch (extractError) {
-      const rawMessage = extractError instanceof Error ? extractError.message : 'Extraction failed';
-      console.error('[api:projects] extraction failed:', rawMessage);
-      const userMessage = cleanSdkError(rawMessage);
-
-      const failedProject = await db.project.update({
-        where: { id: project.id },
-        data: { status: 'FAILED', error: userMessage },
-      });
-
-      return NextResponse.json(serializeProject(failedProject), { status: 422 });
-    }
+    return NextResponse.json(serializeProject(project), { status: 201 });
   } catch (error) {
     console.error('Failed to create project:', error);
     return NextResponse.json(

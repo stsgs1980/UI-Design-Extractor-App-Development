@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useExtractorStore } from '@/store/extractor-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,37 +56,36 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
 };
 
-/** Safely parse JSON from a response, handling non-JSON bodies (HTML error pages, etc.) */
-async function safeJson(res: Response): Promise<Record<string, unknown>> {
-  const ct = res.headers.get('content-type') || '';
-  if (!ct.includes('application/json')) {
-    const text = await res.text().catch(() => '');
-    console.error('[extract] non-JSON response:', res.status, ct, text.slice(0, 200));
-    throw new Error(`Server returned ${res.status} (${ct || 'unknown content type'}). The request may have timed out — try again.`);
-  }
-  return res.json();
+/** Map Prisma project status to pipeline step states */
+function statusToSteps(status: string): PipelineStep[] {
+  const map: Record<string, Record<string, PipelineStep['status']>> = {
+    PENDING:     { extract: 'pending' },
+    EXTRACTING:  { extract: 'running' },
+    EXTRACTED:   { extract: 'completed' },
+    ANALYZING:   { extract: 'completed', analyze: 'running' },
+    ANALYZED:    { extract: 'completed', analyze: 'completed' },
+    SPECCING:    { extract: 'completed', analyze: 'completed', spec: 'running' },
+    SPECCED:     { extract: 'completed', analyze: 'completed', spec: 'completed' },
+    GENERATING:  { extract: 'completed', analyze: 'completed', spec: 'completed', generate: 'running' },
+    COMPLETED:   { extract: 'completed', analyze: 'completed', spec: 'completed', generate: 'completed' },
+    FAILED:      {}, // handled separately
+  };
+
+  const overrides = map[status] || {};
+  return PIPELINE_STEPS.map((s) => ({
+    ...s,
+    status: overrides[s.id] || 'pending',
+  }));
 }
 
-/** Fetch with timeout using AbortController */
-async function fetchWithTimeout(input: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<Response> {
-  const { timeoutMs, ...fetchInit } = init;
-  if (!timeoutMs) return fetch(input, fetchInit);
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(input, { ...fetchInit, signal: controller.signal });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Request timed out. The server took too long to respond.');
-    }
-    throw err;
-  } finally {
-    clearTimeout(id);
-  }
-}
+/** Terminal statuses — stop polling */
+const TERMINAL_STATUSES = new Set(['COMPLETED', 'FAILED']);
+
+/** Polling interval in ms */
+const POLL_INTERVAL = 2_500;
 
 export function ExtractView() {
-  const { addProject, selectProject, setProcessing, isProcessing } = useExtractorStore();
+  const { addProject, selectProject, setProcessing, isProcessing, updateProject } = useExtractorStore();
 
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
@@ -95,12 +94,86 @@ export function ExtractView() {
   const [codeFormat, setCodeFormat] = useState<CodeFormat>('html');
   const [runFullPipeline, setRunFullPipeline] = useState(true);
   const [currentSteps, setCurrentSteps] = useState<PipelineStep[]>(
-    PIPELINE_STEPS.map((s) => ({ ...s, status: 'pending' }))
+    PIPELINE_STEPS.map((s) => ({ ...s, status: 'pending' })),
   );
 
-  function updateStep(stepId: string, status: PipelineStep['status']) {
-    setCurrentSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, status } : s)));
-  }
+  // Refs for polling
+  const pollingProjectId = useRef<string | null>(null);
+  const pollingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastStatus = useRef<string | null>(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingTimer.current) clearInterval(pollingTimer.current);
+    };
+  }, []);
+
+  /** Stop polling */
+  const stopPolling = useCallback(() => {
+    if (pollingTimer.current) {
+      clearInterval(pollingTimer.current);
+      pollingTimer.current = null;
+    }
+    pollingProjectId.current = null;
+  }, []);
+
+  /** Start polling project status */
+  const startPolling = useCallback((projectId: string) => {
+    // Clear any existing poll
+    if (pollingTimer.current) clearInterval(pollingTimer.current);
+    pollingProjectId.current = projectId;
+    lastStatus.current = null;
+
+    pollingTimer.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}`);
+        if (!res.ok) return;
+        const project = await res.json();
+        const status: string = project.status;
+
+        // Skip if status hasn't changed
+        if (status === lastStatus.current) return;
+        lastStatus.current = status;
+
+        console.log('[extract:poll] status:', status);
+
+        // Update pipeline step indicators
+        if (status === 'FAILED') {
+          // Mark currently running step as failed
+          setCurrentSteps((prev) =>
+            prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s)),
+          );
+          const errorMsg = project.error || 'Pipeline failed';
+          console.error('[extract:poll] FAILED:', errorMsg);
+          toast.error(errorMsg);
+          stopPolling();
+          setProcessing(false);
+          // Update project in store
+          updateProject(projectId, project);
+        } else if (status === 'COMPLETED') {
+          setCurrentSteps(statusToSteps('COMPLETED'));
+          toast.success('Pipeline completed successfully!');
+          stopPolling();
+          setProcessing(false);
+          // Fetch full project and navigate
+          const fullRes = await fetch(`/api/projects/${projectId}`);
+          if (fullRes.ok) {
+            const fullProject = await fullRes.json();
+            updateProject(projectId, fullProject);
+          }
+          selectProject(projectId);
+        } else {
+          // Intermediate status — update steps
+          setCurrentSteps(statusToSteps(status));
+          // Update project in store
+          updateProject(projectId, project);
+        }
+      } catch (err) {
+        console.error('[extract:poll] error:', err);
+      }
+    }, POLL_INTERVAL);
+  }, [stopPolling, updateProject, selectProject, setProcessing]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -125,86 +198,143 @@ export function ExtractView() {
     console.log('[extract] starting pipeline for:', fullUrl, '| fullPipeline:', runFullPipeline);
 
     try {
-      updateStep('extract', 'running');
-      console.log('[extract] step 1/4: creating project...');
-      const createRes = await fetchWithTimeout('/api/projects', {
+      // Step 1: Create project (extraction runs in background)
+      setCurrentSteps((prev) => prev.map((s) => (s.id === 'extract' ? { ...s, status: 'running' as const } : s)));
+
+      const createRes = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: fullUrl, name: projectName, componentQuery: componentQuery || undefined, viewport }),
-        timeoutMs: 30_000,
       });
 
       if (!createRes.ok) {
-        const err = await safeJson(createRes);
-        throw new Error((err.error as string) || 'Extraction failed');
+        const err = await createRes.json().catch(() => ({ error: 'Failed to create project' }));
+        throw new Error((err.error as string) || 'Failed to create project');
       }
 
-      const project = await safeJson(createRes);
-      if (project.status === 'failed') {
-        throw new Error((project.error as string) || 'Extraction failed');
-      }
-      console.log('[extract] project created:', (project as Record<string, string>).id, (project as Record<string, string>).name);
+      const project = await createRes.json();
+      const projectId = project.id;
+      console.log('[extract] project created:', projectId, project.name, '| status:', project.status);
+      addProject(project);
 
-      addProject(project as Parameters<typeof addProject>[0]);
-      updateStep('extract', 'completed');
-
-      if (!runFullPipeline) {
-        toast.success('Page extracted successfully');
-        selectProject((project as Record<string, string>).id);
+      // If project was created with EXTRACTING status, start polling for extraction
+      if (project.status === 'EXTRACTING') {
+        setCurrentSteps((prev) => prev.map((s) => (s.id === 'extract' ? { ...s, status: 'running' as const } : s)));
+        // We'll wait for extraction to complete before starting pipeline
+        // Start polling — the poll handler will deal with EXTRACTED → trigger pipeline
+        startPollingForExtractionThenPipeline(projectId);
         return;
       }
 
-      updateStep('analyze', 'running');
-      console.log('[extract] step 2/4: analyzing...');
-      const analyzeRes = await fetchWithTimeout(`/api/projects/${(project as Record<string, string>).id}/analyze`, {
-        method: 'POST',
-        timeoutMs: 120_000,
-      });
-      if (!analyzeRes.ok) {
-        const err = await safeJson(analyzeRes);
-        throw new Error((err.error as string) || 'Analysis failed');
+      // If somehow already extracted (shouldn't happen with async), proceed
+      if (project.status === 'FAILED') {
+        throw new Error(project.error || 'Extraction failed');
       }
-      await analyzeRes.json();
-      updateStep('analyze', 'completed');
-      console.log('[extract] step 2/4: analyze done');
 
-      updateStep('spec', 'running');
-      console.log('[extract] step 3/4: generating specs...');
-      const specRes = await fetchWithTimeout(`/api/projects/${(project as Record<string, string>).id}/spec`, {
-        method: 'POST',
-        timeoutMs: 180_000,
-      });
-      if (!specRes.ok) {
-        const err = await safeJson(specRes);
-        throw new Error((err.error as string) || 'Spec generation failed');
-      }
-      console.log('[extract] step 3/4: spec done');
-      updateStep('spec', 'completed');
+      // Already extracted — skip to pipeline
+      setCurrentSteps((prev) => prev.map((s) => (s.id === 'extract' ? { ...s, status: 'completed' as const } : s)));
 
-      updateStep('generate', 'running');
-      console.log('[extract] step 4/4: generating code...');
-      const genRes = await fetchWithTimeout(`/api/projects/${(project as Record<string, string>).id}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codeFormat }),
-        timeoutMs: 180_000,
-      });
-      if (!genRes.ok) {
-        const err = await safeJson(genRes);
-        throw new Error((err.error as string) || 'Code generation failed');
+      if (!runFullPipeline) {
+        toast.success('Page extracted successfully');
+        selectProject(projectId);
+        setProcessing(false);
+        return;
       }
-      updateStep('generate', 'completed');
-      console.log('[extract] pipeline completed successfully');
-      toast.success('Pipeline completed successfully');
-      selectProject((project as Record<string, string>).id);
+
+      await startPipelineAndPoll(projectId);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error('[extract] pipeline FAILED:', message);
       toast.error(message);
       setCurrentSteps((prev) =>
-        prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s))
+        prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s)),
       );
-    } finally {
+      setProcessing(false);
+    }
+  }
+
+  /** Poll until extraction completes, then auto-start the pipeline */
+  function startPollingForExtractionThenPipeline(projectId: string) {
+    if (pollingTimer.current) clearInterval(pollingTimer.current);
+    pollingProjectId.current = projectId;
+    lastStatus.current = 'EXTRACTING';
+
+    pollingTimer.current = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}`);
+        if (!res.ok) return;
+        const project = await res.json();
+        const status: string = project.status;
+
+        if (status === lastStatus.current) return;
+        lastStatus.current = status;
+        console.log('[extract:poll:extract] status:', status);
+
+        if (status === 'EXTRACTED') {
+          // Extraction done — update store and start pipeline
+          updateProject(projectId, project);
+          setCurrentSteps((prev) => prev.map((s) => (s.id === 'extract' ? { ...s, status: 'completed' as const } : s)));
+
+          if (runFullPipeline) {
+            // Stop this poll, start pipeline poll
+            if (pollingTimer.current) clearInterval(pollingTimer.current);
+            pollingTimer.current = null;
+            startPipelineAndPoll(projectId);
+          } else {
+            toast.success('Page extracted successfully');
+            selectProject(projectId);
+            setProcessing(false);
+            if (pollingTimer.current) clearInterval(pollingTimer.current);
+            pollingTimer.current = null;
+          }
+        } else if (status === 'FAILED') {
+          setCurrentSteps((prev) =>
+            prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s)),
+          );
+          toast.error(project.error || 'Extraction failed');
+          updateProject(projectId, project);
+          setProcessing(false);
+          if (pollingTimer.current) clearInterval(pollingTimer.current);
+          pollingTimer.current = null;
+        } else {
+          updateProject(projectId, project);
+        }
+      } catch (err) {
+        console.error('[extract:poll:extract] error:', err);
+      }
+    }, POLL_INTERVAL);
+  }
+
+  /** Kick off the pipeline (analyze→spec→generate) and start polling */
+  async function startPipelineAndPoll(projectId: string) {
+    try {
+      const pipelineRes = await fetch(`/api/projects/${projectId}/pipeline`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codeFormat }),
+      });
+
+      if (pipelineRes.status === 409) {
+        toast.info('Pipeline is already running for this project');
+        startPolling(projectId);
+        return;
+      }
+
+      if (!pipelineRes.ok) {
+        const err = await pipelineRes.json().catch(() => ({ error: 'Failed to start pipeline' }));
+        throw new Error((err.error as string) || 'Failed to start pipeline');
+      }
+
+      console.log('[extract] pipeline accepted (202), starting poll...');
+      // Pipeline is running in background — poll for status
+      startPolling(projectId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start pipeline';
+      console.error('[extract] pipeline start FAILED:', message);
+      toast.error(message);
+      setCurrentSteps((prev) =>
+        prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s)),
+      );
       setProcessing(false);
     }
   }
@@ -384,7 +514,7 @@ export function ExtractView() {
             <div className="mb-4 flex items-center gap-2.5">
               <div className={cn(
                 'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
-                isRunning ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-muted'
+                isRunning ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-muted',
               )}>
                 <Cpu className={cn('h-4 w-4', isRunning ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')} />
               </div>

@@ -3,11 +3,44 @@ import { db } from '@/lib/db';
 import ZAI from 'z-ai-web-dev-sdk';
 import { pipelineRequestSchema } from '@/lib/validators';
 import { runAnalyze, runSpec, runGenerate } from '@/lib/pipeline-steps';
-import { serializeProject, serializeComponent, serializeToken } from '@/lib/serialize';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { safeUpdateProjectStatus } from '@/lib/safe-update';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+/**
+ * Run the full pipeline (analyze → spec → generate) in the background.
+ * This function is NOT awaited — it runs after the 202 response is sent.
+ */
+async function runFullPipeline(projectId: string, codeFormat: string) {
+  console.log('[pipeline:bg] starting pipeline for:', projectId, '| format:', codeFormat);
+  const zai = await ZAI.create();
+
+  try {
+    const project = await db.project.findUnique({ where: { id: projectId } });
+    if (!project || !project.rawHtml) {
+      console.error('[pipeline:bg] project not found or no HTML:', projectId);
+      await safeUpdateProjectStatus(projectId, 'FAILED', 'Project not found or no HTML data');
+      return;
+    }
+
+    console.log('[pipeline:bg] step 1/3: analyze...');
+    await runAnalyze(projectId, zai, project.componentQuery);
+
+    console.log('[pipeline:bg] step 2/3: spec...');
+    await runSpec(projectId, zai);
+
+    console.log('[pipeline:bg] step 3/3: generate (' + codeFormat + ')...');
+    await runGenerate(projectId, zai, codeFormat);
+
+    await safeUpdateProjectStatus(projectId, 'COMPLETED');
+    console.log('[pipeline:bg] pipeline completed:', projectId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Pipeline failed';
+    console.error('[pipeline:bg] FAILED:', msg);
+    await safeUpdateProjectStatus(projectId, 'FAILED', msg);
+  }
+}
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
@@ -42,41 +75,27 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
     if (!project.rawHtml) {
       console.warn('[api:pipeline] no rawHtml for project:', id);
-      return NextResponse.json({ error: 'No HTML data. Extract the page first.' }, { status: 400 });
+      return NextResponse.json({ error: 'No HTML data. Page is still being extracted — please wait.' }, { status: 400 });
+    }
+    if (project.status === 'COMPLETED') {
+      console.warn('[api:pipeline] project already completed:', id);
+      return NextResponse.json({ error: 'Pipeline already completed for this project.' }, { status: 400 });
+    }
+    if (project.status === 'FAILED') {
+      console.log('[api:pipeline] restarting pipeline for failed project:', id);
+    }
+    if (['ANALYZING', 'SPECCING', 'GENERATING'].includes(project.status)) {
+      console.warn('[api:pipeline] pipeline already running:', id, project.status);
+      return NextResponse.json({ error: 'Pipeline is already running.' }, { status: 409 });
     }
 
-    console.log('[api:pipeline] starting pipeline for:', project.name, '| html length:', project.rawHtml.length);
-    const zai = await ZAI.create();
+    // Fire-and-forget: run pipeline in background, return 202 immediately
+    runFullPipeline(id, codeFormat).catch((err) => {
+      console.error('[api:pipeline] background pipeline crashed:', err);
+    });
 
-    try {
-      console.log('[api:pipeline] step 1/3: analyze...');
-      await runAnalyze(id, zai, project.componentQuery);
-      console.log('[api:pipeline] step 2/3: spec...');
-      await runSpec(id, zai);
-      console.log('[api:pipeline] step 3/3: generate (' + codeFormat + ')...');
-      await runGenerate(id, zai, codeFormat);
-
-      const finalProject = await db.project.update({
-        where: { id },
-        data: { status: 'COMPLETED' },
-        include: {
-          components: { orderBy: { createdAt: 'asc' } },
-          tokens: { orderBy: { category: 'asc' } },
-        },
-      });
-
-      console.log('[api:pipeline] pipeline completed:', project.name);
-      return NextResponse.json({
-        ...serializeProject(finalProject),
-        components: finalProject.components.map(serializeComponent),
-        tokens: finalProject.tokens.map(serializeToken),
-      });
-    } catch (pipelineError) {
-      const msg = pipelineError instanceof Error ? pipelineError.message : 'Pipeline failed';
-      console.error('[api:pipeline] step FAILED:', msg);
-      await safeUpdateProjectStatus(id, 'FAILED', msg);
-      return NextResponse.json({ error: msg }, { status: 500 });
-    }
+    console.log('[api:pipeline] pipeline started in background for:', id);
+    return NextResponse.json({ accepted: true, message: 'Pipeline started' }, { status: 202 });
   } catch (error) {
     console.error('[api:pipeline] UNEXPECTED:', error);
     return NextResponse.json({ error: 'Pipeline failed' }, { status: 500 });
