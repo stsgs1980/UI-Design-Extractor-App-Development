@@ -71,7 +71,19 @@ export async function runAnalyze(projectId: string, zai: ZaiClient, componentQue
   console.log('[pipeline:analyze] LLM response length:', response?.length);
   if (!response) throw new Error('Empty LLM response during analysis');
 
-  const parsed = JSON.parse(repairJson(stripMarkdownFences(response)));
+  const cleaned = stripMarkdownFences(response);
+  const repaired = repairJson(cleaned);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(repaired);
+  } catch (parseErr) {
+    console.error('[pipeline:analyze] JSON parse failed after repair. Response length:', cleaned.length, 'Repaired length:', repaired.length);
+    console.error('[pipeline:analyze] parse error:', parseErr instanceof Error ? parseErr.message : parseErr);
+    // Log first 500 and last 200 chars of the repaired JSON for debugging
+    console.error('[pipeline:analyze] repaired start:', repaired.substring(0, 500));
+    console.error('[pipeline:analyze] repaired end:', repaired.substring(repaired.length - 200));
+    throw new Error('LLM returned invalid JSON that could not be repaired. The page may be too complex.');
+  }
   console.log('[pipeline:analyze] parsed components:', (parsed.components || []).length, 'tokens:', (parsed.designTokens || []).length);
 
   const validComponents = (parsed.components || []).filter(
