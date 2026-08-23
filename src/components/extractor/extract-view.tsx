@@ -56,6 +56,35 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
 };
 
+/** Safely parse JSON from a response, handling non-JSON bodies (HTML error pages, etc.) */
+async function safeJson(res: Response): Promise<Record<string, unknown>> {
+  const ct = res.headers.get('content-type') || '';
+  if (!ct.includes('application/json')) {
+    const text = await res.text().catch(() => '');
+    console.error('[extract] non-JSON response:', res.status, ct, text.slice(0, 200));
+    throw new Error(`Server returned ${res.status} (${ct || 'unknown content type'}). The request may have timed out — try again.`);
+  }
+  return res.json();
+}
+
+/** Fetch with timeout using AbortController */
+async function fetchWithTimeout(input: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<Response> {
+  const { timeoutMs, ...fetchInit } = init;
+  if (!timeoutMs) return fetch(input, fetchInit);
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...fetchInit, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Request timed out. The server took too long to respond.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 export function ExtractView() {
   const { addProject, selectProject, setProcessing, isProcessing } = useExtractorStore();
 
@@ -98,39 +127,42 @@ export function ExtractView() {
     try {
       updateStep('extract', 'running');
       console.log('[extract] step 1/4: creating project...');
-      const createRes = await fetch('/api/projects', {
+      const createRes = await fetchWithTimeout('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: fullUrl, name: projectName, componentQuery: componentQuery || undefined, viewport }),
+        timeoutMs: 30_000,
       });
 
       if (!createRes.ok) {
-        const err = await createRes.json();
-        throw new Error(err.error || 'Extraction failed');
+        const err = await safeJson(createRes);
+        throw new Error((err.error as string) || 'Extraction failed');
       }
 
-      const project = await createRes.json();
+      const project = await safeJson(createRes);
       if (project.status === 'failed') {
-        throw new Error(project.error || 'Extraction failed');
+        throw new Error((project.error as string) || 'Extraction failed');
       }
-      console.log('[extract] project created:', project.id, project.name);
+      console.log('[extract] project created:', (project as Record<string, string>).id, (project as Record<string, string>).name);
 
-      addProject(project);
+      addProject(project as Parameters<typeof addProject>[0]);
       updateStep('extract', 'completed');
 
       if (!runFullPipeline) {
         toast.success('Page extracted successfully');
-        selectProject(project.id);
-        setProcessing(false);
+        selectProject((project as Record<string, string>).id);
         return;
       }
 
       updateStep('analyze', 'running');
       console.log('[extract] step 2/4: analyzing...');
-      const analyzeRes = await fetch(`/api/projects/${project.id}/analyze`, { method: 'POST' });
+      const analyzeRes = await fetchWithTimeout(`/api/projects/${(project as Record<string, string>).id}/analyze`, {
+        method: 'POST',
+        timeoutMs: 120_000,
+      });
       if (!analyzeRes.ok) {
-        const err = await analyzeRes.json();
-        throw new Error(err.error || 'Analysis failed');
+        const err = await safeJson(analyzeRes);
+        throw new Error((err.error as string) || 'Analysis failed');
       }
       await analyzeRes.json();
       updateStep('analyze', 'completed');
@@ -138,29 +170,33 @@ export function ExtractView() {
 
       updateStep('spec', 'running');
       console.log('[extract] step 3/4: generating specs...');
-      const specRes = await fetch(`/api/projects/${project.id}/spec`, { method: 'POST' });
+      const specRes = await fetchWithTimeout(`/api/projects/${(project as Record<string, string>).id}/spec`, {
+        method: 'POST',
+        timeoutMs: 180_000,
+      });
       if (!specRes.ok) {
-        const err = await specRes.json();
-        throw new Error(err.error || 'Spec generation failed');
+        const err = await safeJson(specRes);
+        throw new Error((err.error as string) || 'Spec generation failed');
       }
       console.log('[extract] step 3/4: spec done');
       updateStep('spec', 'completed');
 
       updateStep('generate', 'running');
       console.log('[extract] step 4/4: generating code...');
-      const genRes = await fetch(`/api/projects/${project.id}/generate`, {
+      const genRes = await fetchWithTimeout(`/api/projects/${(project as Record<string, string>).id}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codeFormat }),
+        timeoutMs: 180_000,
       });
       if (!genRes.ok) {
-        const err = await genRes.json();
-        throw new Error(err.error || 'Code generation failed');
+        const err = await safeJson(genRes);
+        throw new Error((err.error as string) || 'Code generation failed');
       }
       updateStep('generate', 'completed');
       console.log('[extract] pipeline completed successfully');
       toast.success('Pipeline completed successfully');
-      selectProject(project.id);
+      selectProject((project as Record<string, string>).id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error('[extract] pipeline FAILED:', message);
