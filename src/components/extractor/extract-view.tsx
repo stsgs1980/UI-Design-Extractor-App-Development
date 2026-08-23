@@ -56,19 +56,19 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
 };
 
-/** Map Prisma project status to pipeline step states */
+/** Map serialized (lowercase) project status to pipeline step states */
 function statusToSteps(status: string): PipelineStep[] {
   const map: Record<string, Record<string, PipelineStep['status']>> = {
-    PENDING:     { extract: 'pending' },
-    EXTRACTING:  { extract: 'running' },
-    EXTRACTED:   { extract: 'completed' },
-    ANALYZING:   { extract: 'completed', analyze: 'running' },
-    ANALYZED:    { extract: 'completed', analyze: 'completed' },
-    SPECCING:    { extract: 'completed', analyze: 'completed', spec: 'running' },
-    SPECCED:     { extract: 'completed', analyze: 'completed', spec: 'completed' },
-    GENERATING:  { extract: 'completed', analyze: 'completed', spec: 'completed', generate: 'running' },
-    COMPLETED:   { extract: 'completed', analyze: 'completed', spec: 'completed', generate: 'completed' },
-    FAILED:      {}, // handled separately
+    pending:     { extract: 'pending' },
+    extracting:  { extract: 'running' },
+    extracted:   { extract: 'completed' },
+    analyzing:   { extract: 'completed', analyze: 'running' },
+    analyzed:    { extract: 'completed', analyze: 'completed' },
+    speccing:    { extract: 'completed', analyze: 'completed', spec: 'running' },
+    specced:     { extract: 'completed', analyze: 'completed', spec: 'completed' },
+    generating:  { extract: 'completed', analyze: 'completed', spec: 'completed', generate: 'running' },
+    completed:   { extract: 'completed', analyze: 'completed', spec: 'completed', generate: 'completed' },
+    failed:      {}, // handled separately
   };
 
   const overrides = map[status] || {};
@@ -79,7 +79,7 @@ function statusToSteps(status: string): PipelineStep[] {
 }
 
 /** Terminal statuses — stop polling */
-const TERMINAL_STATUSES = new Set(['COMPLETED', 'FAILED']);
+const TERMINAL_STATUSES = new Set(['completed', 'failed']);
 
 /** Polling interval in ms */
 const POLL_INTERVAL = 2_500;
@@ -139,7 +139,7 @@ export function ExtractView() {
         console.log('[extract:poll] status:', status);
 
         // Update pipeline step indicators
-        if (status === 'FAILED') {
+        if (status === 'failed') {
           // Mark currently running step as failed
           setCurrentSteps((prev) =>
             prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s)),
@@ -151,8 +151,8 @@ export function ExtractView() {
           setProcessing(false);
           // Update project in store
           updateProject(projectId, project);
-        } else if (status === 'COMPLETED') {
-          setCurrentSteps(statusToSteps('COMPLETED'));
+        } else if (status === 'completed') {
+          setCurrentSteps(statusToSteps('completed'));
           toast.success('Pipeline completed successfully!');
           stopPolling();
           setProcessing(false);
@@ -217,31 +217,10 @@ export function ExtractView() {
       console.log('[extract] project created:', projectId, project.name, '| status:', project.status);
       addProject(project);
 
-      // If project was created with EXTRACTING status, start polling for extraction
-      if (project.status === 'EXTRACTING') {
-        setCurrentSteps((prev) => prev.map((s) => (s.id === 'extract' ? { ...s, status: 'running' as const } : s)));
-        // We'll wait for extraction to complete before starting pipeline
-        // Start polling — the poll handler will deal with EXTRACTED → trigger pipeline
-        startPollingForExtractionThenPipeline(projectId);
-        return;
-      }
-
-      // If somehow already extracted (shouldn't happen with async), proceed
-      if (project.status === 'FAILED') {
-        throw new Error(project.error || 'Extraction failed');
-      }
-
-      // Already extracted — skip to pipeline
-      setCurrentSteps((prev) => prev.map((s) => (s.id === 'extract' ? { ...s, status: 'completed' as const } : s)));
-
-      if (!runFullPipeline) {
-        toast.success('Page extracted successfully');
-        selectProject(projectId);
-        setProcessing(false);
-        return;
-      }
-
-      await startPipelineAndPoll(projectId);
+      // Always poll — handles both EXTRACTING (normal) and EXTRACTED (fast extraction)
+      // and also FAILED, COMPLETED, or any other status
+      startPollingForExtractionThenPipeline(projectId);
+      return;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error('[extract] pipeline FAILED:', message);
@@ -257,7 +236,7 @@ export function ExtractView() {
   function startPollingForExtractionThenPipeline(projectId: string) {
     if (pollingTimer.current) clearInterval(pollingTimer.current);
     pollingProjectId.current = projectId;
-    lastStatus.current = 'EXTRACTING';
+    lastStatus.current = null; // Don't skip first poll
 
     pollingTimer.current = setInterval(async () => {
       try {
@@ -270,13 +249,13 @@ export function ExtractView() {
         lastStatus.current = status;
         console.log('[extract:poll:extract] status:', status);
 
-        if (status === 'EXTRACTED') {
-          // Extraction done — update store and start pipeline
-          updateProject(projectId, project);
-          setCurrentSteps((prev) => prev.map((s) => (s.id === 'extract' ? { ...s, status: 'completed' as const } : s)));
+        // Update step indicators based on current status
+        setCurrentSteps(statusToSteps(status));
+        updateProject(projectId, project);
 
+        if (status === 'extracted') {
+          // Extraction done — start pipeline
           if (runFullPipeline) {
-            // Stop this poll, start pipeline poll
             if (pollingTimer.current) clearInterval(pollingTimer.current);
             pollingTimer.current = null;
             startPipelineAndPoll(projectId);
@@ -287,26 +266,32 @@ export function ExtractView() {
             if (pollingTimer.current) clearInterval(pollingTimer.current);
             pollingTimer.current = null;
           }
-        } else if (status === 'FAILED') {
+        } else if (status === 'failed') {
           setCurrentSteps((prev) =>
             prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s)),
           );
           toast.error(project.error || 'Extraction failed');
-          updateProject(projectId, project);
           setProcessing(false);
           if (pollingTimer.current) clearInterval(pollingTimer.current);
           pollingTimer.current = null;
-        } else {
-          updateProject(projectId, project);
+        } else if (status === 'completed') {
+          // Project was already fully processed (e.g. re-run on existing project)
+          toast.success('Project already completed');
+          selectProject(projectId);
+          setProcessing(false);
+          if (pollingTimer.current) clearInterval(pollingTimer.current);
+          pollingTimer.current = null;
         }
+        // For EXTRACTING, ANALYZING, SPECCING, GENERATING — just keep polling
       } catch (err) {
         console.error('[extract:poll:extract] error:', err);
       }
     }, POLL_INTERVAL);
   }
 
-  /** Kick off the pipeline (analyze→spec→generate) and start polling */
-  async function startPipelineAndPoll(projectId: string) {
+  /** Kick off the pipeline (analyze→spec→generate) and start polling.
+   *  Retries with backoff if extraction isn't ready yet. */
+  async function startPipelineAndPoll(projectId: string, attempt = 0) {
     try {
       const pipelineRes = await fetch(`/api/projects/${projectId}/pipeline`, {
         method: 'POST',
@@ -322,11 +307,19 @@ export function ExtractView() {
 
       if (!pipelineRes.ok) {
         const err = await pipelineRes.json().catch(() => ({ error: 'Failed to start pipeline' }));
-        throw new Error((err.error as string) || 'Failed to start pipeline');
+        const msg = (err.error as string) || 'Failed to start pipeline';
+
+        // If extraction isn't ready yet, retry after a short delay
+        if (msg.includes('still being extracted') && attempt < 5) {
+          const delay = 2000 * (attempt + 1);
+          console.log(`[extract] pipeline not ready (attempt ${attempt + 1}/5), retrying in ${delay}ms...`);
+          setTimeout(() => startPipelineAndPoll(projectId, attempt + 1), delay);
+          return;
+        }
+        throw new Error(msg);
       }
 
       console.log('[extract] pipeline accepted (202), starting poll...');
-      // Pipeline is running in background — poll for status
       startPolling(projectId);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start pipeline';
