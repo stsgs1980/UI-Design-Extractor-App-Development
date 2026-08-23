@@ -12,9 +12,11 @@ import {
   PanelLeftOpen,
   Command,
   Trash2,
+  Terminal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { AppView } from '@/types/extractor';
+import { LogViewer } from './log-viewer';
 
 interface NavItem {
   id: AppView;
@@ -33,6 +35,7 @@ export function AppSidebar() {
   const { currentView, setView, sidebarOpen, toggleSidebar, projects, removeProject } = useExtractorStore();
   const recentProjects = (projects || []).slice(0, 5);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
 
   async function handleDeleteProject(e: React.MouseEvent, id: string) {
     e.stopPropagation();
@@ -163,6 +166,23 @@ export function AppSidebar() {
         {sidebarOpen && (
           <button
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/70"
+            onClick={() => setLogOpen(true)}
+          >
+            <Terminal className="h-3.5 w-3.5" />
+            <span>Logs</span>
+          </button>
+        )}
+        {!sidebarOpen && (
+          <button
+            className="flex w-full items-center justify-center rounded-lg px-3 py-2 text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            onClick={() => setLogOpen(true)}
+          >
+            <Terminal className="h-4 w-4" />
+          </button>
+        )}
+        {sidebarOpen && (
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/70"
             onClick={() => {}}
           >
             <Command className="h-3.5 w-3.5" />
@@ -189,6 +209,8 @@ export function AppSidebar() {
           )}
         </button>
       </div>
+
+      <LogViewer open={logOpen} onOpenChange={setLogOpen} />
     </aside>
   );
 }
