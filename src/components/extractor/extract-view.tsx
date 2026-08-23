@@ -93,9 +93,11 @@ export function ExtractView() {
 
     setProcessing(true);
     setCurrentSteps(PIPELINE_STEPS.map((s) => ({ ...s, status: 'pending' })));
+    console.log('[extract] starting pipeline for:', fullUrl, '| fullPipeline:', runFullPipeline);
 
     try {
       updateStep('extract', 'running');
+      console.log('[extract] step 1/4: creating project...');
       const createRes = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -111,6 +113,7 @@ export function ExtractView() {
       if (project.status === 'failed') {
         throw new Error(project.error || 'Extraction failed');
       }
+      console.log('[extract] project created:', project.id, project.name);
 
       addProject(project);
       updateStep('extract', 'completed');
@@ -123,6 +126,7 @@ export function ExtractView() {
       }
 
       updateStep('analyze', 'running');
+      console.log('[extract] step 2/4: analyzing...');
       const analyzeRes = await fetch(`/api/projects/${project.id}/analyze`, { method: 'POST' });
       if (!analyzeRes.ok) {
         const err = await analyzeRes.json();
@@ -130,16 +134,20 @@ export function ExtractView() {
       }
       await analyzeRes.json();
       updateStep('analyze', 'completed');
+      console.log('[extract] step 2/4: analyze done');
 
       updateStep('spec', 'running');
+      console.log('[extract] step 3/4: generating specs...');
       const specRes = await fetch(`/api/projects/${project.id}/spec`, { method: 'POST' });
       if (!specRes.ok) {
         const err = await specRes.json();
         throw new Error(err.error || 'Spec generation failed');
       }
+      console.log('[extract] step 3/4: spec done');
       updateStep('spec', 'completed');
 
       updateStep('generate', 'running');
+      console.log('[extract] step 4/4: generating code...');
       const genRes = await fetch(`/api/projects/${project.id}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,10 +158,12 @@ export function ExtractView() {
         throw new Error(err.error || 'Code generation failed');
       }
       updateStep('generate', 'completed');
+      console.log('[extract] pipeline completed successfully');
       toast.success('Pipeline completed successfully');
       selectProject(project.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error('[extract] pipeline FAILED:', message);
       toast.error(message);
       setCurrentSteps((prev) =>
         prev.map((s) => (s.status === 'running' ? { ...s, status: 'failed' as const } : s))
