@@ -4,7 +4,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 
 const LOG_FILE = path.join(process.cwd(), 'dev.log');
-const MAX_LINES = 200;
+const MAX_LINES = 300;
 
 export async function GET() {
   try {
@@ -13,7 +13,7 @@ export async function GET() {
     }
 
     const raw = await readFile(LOG_FILE, 'utf-8');
-    const allLines = raw.split('\n');
+    const allLines = raw.split('\n').filter((l) => l.trim());
     const total = allLines.length;
     const lines = allLines.slice(-MAX_LINES);
 
