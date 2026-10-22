@@ -44,7 +44,7 @@ async function runFullPipeline(projectId: string, codeFormat: string) {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
-    const rl = checkRateLimit(request, { windowMs: 120_000, maxRequests: 3 });
+    const rl = checkRateLimit(request, { windowMs: 60_000, maxRequests: 10 });
     if (!rl.allowed) {
       console.warn('[api:pipeline] rate limited');
       return NextResponse.json(
