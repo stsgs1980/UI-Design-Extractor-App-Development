@@ -65,3 +65,5 @@ worklog.md
 
 # tests (Z.ai runtime tests, not part of the app)
 /tests/
+dev.log
+worklog.md
