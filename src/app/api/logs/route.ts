@@ -5,7 +5,7 @@ import path from 'path';
 
 const LOG_FILE = path.join(process.cwd(), 'dev.log');
 const MAX_LINES = 300;
-const MAX_LINE_LENGTH = 500;
+const MAX_LINE_LENGTH = 2000;
 
 /** Sanitize a single log line: strip binary chars, truncate if too long. */
 function sanitizeLine(line: string): string {

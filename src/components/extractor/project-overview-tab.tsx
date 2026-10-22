@@ -103,8 +103,7 @@ export function OverviewTab({
           </div>
           <div className="mt-3 max-h-64 overflow-auto rounded-lg bg-muted p-3">
             <pre className="text-[11px] leading-relaxed text-muted-foreground font-mono whitespace-pre-wrap break-all">
-              {project.rawHtml.substring(0, 5000)}
-              {project.rawHtml.length > 5000 && '\n... (truncated)'}
+              {project.rawHtml}
             </pre>
           </div>
         </div>
