@@ -5,6 +5,20 @@ import path from 'path';
 
 const LOG_FILE = path.join(process.cwd(), 'dev.log');
 const MAX_LINES = 300;
+const MAX_LINE_LENGTH = 500;
+
+/** Sanitize a single log line: strip binary chars, truncate if too long. */
+function sanitizeLine(line: string): string {
+  // Remove null bytes and other control characters (keep \t and normal whitespace)
+  let clean = line.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+  // Trim whitespace
+  clean = clean.trim();
+  // Truncate very long lines (e.g. prisma queries) with ellipsis
+  if (clean.length > MAX_LINE_LENGTH) {
+    clean = clean.substring(0, MAX_LINE_LENGTH) + ' ...';
+  }
+  return clean;
+}
 
 export async function GET() {
   try {
@@ -13,7 +27,10 @@ export async function GET() {
     }
 
     const raw = await readFile(LOG_FILE, 'utf-8');
-    const allLines = raw.split('\n').filter((l) => l.trim());
+    const allLines = raw
+      .split('\n')
+      .map(sanitizeLine)
+      .filter((l) => l.length > 0);
     const total = allLines.length;
     const lines = allLines.slice(-MAX_LINES);
 
@@ -28,10 +45,10 @@ export async function GET() {
 export async function POST() {
   try {
     await writeFile(LOG_FILE, '', 'utf-8');
-    console.log('[api:logs] log file truncated');
+    console.log('[api:logs] logs cleared');
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('[api:logs] failed to truncate dev.log:', error);
+    console.error('[api:logs] failed to clear dev.log:', error);
     return NextResponse.json({ error: 'Failed to clear logs' }, { status: 500 });
   }
 }
